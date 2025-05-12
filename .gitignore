@@ -1,0 +1,6 @@
+*.DS_Store
+.Rhistory
+.Rproj.user
+Data/eBird_buffer_data_chunks/
+Data/eBird_data_by_ref_wetland/
+
