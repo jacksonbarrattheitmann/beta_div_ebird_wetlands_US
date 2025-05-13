@@ -102,7 +102,13 @@ env_filt <- env_filt %>%
 # Now create the mob object
 wet_mob <- make_mob_in(wet_comm_filt, plot_attr = env_filt, coord_names = c('LONGITUDE', 'LATITUDE'))
 
-beta_results <- get_delta_stats(wet_mob, env_var = "NA_L1NAME", stats = "betas", type = 'discrete',
-                                log_scale = TRUE)
+# Take a long time to run, so I have this saved as an RDS below for loading into R
+
+# beta_results <- get_delta_stats(wet_mob, env_var = "NA_L1NAME", stats = "betas", type = 'discrete',
+#                                 log_scale = TRUE)
+
+# saveRDS(beta_results, "Data/beta_results.RDS")
+
+beta_results <- readRDS("Data/beta_results.RDS")
 
 plot(beta_results, stat = 'b1')
