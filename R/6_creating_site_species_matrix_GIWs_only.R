@@ -97,7 +97,34 @@ env_filt <- env_filt %>%
 env_filt <- env_filt %>%
   column_to_rownames(var = "LOCALITY_ID")
 
+## Try just making the calc_biodiv object
+## for exploration of the data
 
+biodiv_comm_alpha <- calc_biodiv(wet_comm, groups = env$LOCALITY_ID, 
+                                 index = c('N', 'S', 'S_n', 'S_PIE'), 
+                                 effort = 50,
+                                 extrapolate = FALSE)
+
+
+# Need to join this object with the env data, to plot the S, S_n, and S_PIE
+# within each ecoregion
+
+div_env <- biodiv_comm_alpha %>%
+  rename(LOCALITY_ID = group) %>%
+  inner_join(env, by = "LOCALITY_ID")
+
+# Calculating the means for simplicity
+mean_data <- div_env %>%
+  group_by(index, NA_L1NAME) %>%
+  summarise(mean_value = mean(value), .groups = "drop")
+
+# Now we can plot each of the metrics within the ecoregion, along with the mean
+# so that we can try and interpret the betas below
+
+ggplot() + geom_point(data = div_env, aes(x = NA_L1NAME, y = value, color = NA_L1NAME)) +
+  geom_point(data = mean_data, aes(x = NA_L1NAME, y = mean_value), color = "red", size = 3) +
+  facet_wrap(~index, scales = "free_y") +
+  theme(axis.text = element_text(angle = 90))
 
 # Now create the mob object
 wet_mob <- make_mob_in(wet_comm_filt, plot_attr = env_filt, coord_names = c('LONGITUDE', 'LATITUDE'))
@@ -112,3 +139,8 @@ wet_mob <- make_mob_in(wet_comm_filt, plot_attr = env_filt, coord_names = c('LON
 beta_results <- readRDS("Data/beta_results.RDS")
 
 plot(beta_results, stat = 'b1')
+
+betas <- beta_results$S_df
+
+
+
