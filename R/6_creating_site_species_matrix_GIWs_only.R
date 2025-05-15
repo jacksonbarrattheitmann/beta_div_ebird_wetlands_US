@@ -105,7 +105,6 @@ biodiv_comm_alpha <- calc_biodiv(wet_comm, groups = env$LOCALITY_ID,
                                  effort = 50,
                                  extrapolate = FALSE)
 
-
 # Need to join this object with the env data, to plot the S, S_n, and S_PIE
 # within each ecoregion
 
@@ -113,7 +112,7 @@ div_env <- biodiv_comm_alpha %>%
   rename(LOCALITY_ID = group) %>%
   inner_join(env, by = "LOCALITY_ID")
 
-# Calculating the means for simplicity
+# Calculating the means for plotting
 mean_data <- div_env %>%
   group_by(index, NA_L1NAME) %>%
   summarise(mean_value = mean(value), .groups = "drop")
