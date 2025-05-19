@@ -1,7 +1,7 @@
 # beta_div_ebird_wetlands_US
 Spatial beta-diversity investigation of isolated wetlands in CONUS.
 
-# R scripts
+## R scripts
 
 1_get_ebird_data_from_big_query: WILL NOT RUN. This script grabs the eBird data from CTC's cloud database with eBird data. It is provided in the data folder
 under "Data/ebird_local_alpha_level/". 
