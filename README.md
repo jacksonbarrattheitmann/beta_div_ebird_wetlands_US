@@ -11,3 +11,7 @@ under "Data/ebird_local_alpha_level/".
 5_creating_env_matrix_for_alpha_ebird_data: this script appends Google Earth Engine data, wetland area, and EPA ecoregion level data into an env matrix that is 207 rows long (same number of GIWs). 
 
 6_creating_site_species_matrix_GIWs_only: this is a preliminary script that creates the a 'wet_comm' dataframe object, that is a 207 row site x species matrix, with sites listed as .rownames. This species and abundance is aggregated across 73 checklists for each GIW, the smallest common denominator for submitted checklists across all sites. 
+
+## Data
+1. ebird_local_alpha_level:
+   a. ebird_local_alpha_level_raw.RDS
