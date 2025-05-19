@@ -14,4 +14,4 @@ under "Data/ebird_local_alpha_level/".
 
 ## Data
 1. ebird_local_alpha_level:
-   a. ebird_local_alpha_level_raw.RDS
+   a. ebird_local_alpha_level_raw.RDS: this file is the cleaned and collated version of the other 9 RDS files in this folder. It is the one primarily used in the analysis, and for aggregating beta diversity among JUST GIWs. 
