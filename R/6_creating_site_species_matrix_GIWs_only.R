@@ -125,6 +125,30 @@ ggplot() + geom_point(data = div_env, aes(x = NA_L1NAME, y = value, color = NA_L
   facet_wrap(~index, scales = "free_y") +
   theme(axis.text = element_text(angle = 90))
 
+
+## Trying to use Vegan to calculate beta diversity patterns among all 
+## GIWs then maybe we can plot these against each other by ecoregion
+
+whit_beta <- betadiver(wet_comm_filt, "w")
+
+beta_NA <- betadisper(whit_beta, env_filt$NA_L1NAME, type = "median")
+
+mod <- anova(beta_NA)
+
+permutest(beta_NA, pairwise = TRUE, permutations = 99)
+
+mod.HSD <- TukeyHSD(beta_NA)
+
+plot(mod.HSD)
+
+plot(beta_NA)
+
+plot(beta_NA, ellipse = TRUE, hull = FALSE, conf = 0.90) # 90% data ellipse
+
+boxplot(beta_NA)
+
+
+#### THIS MAY BE UNNECASSARY and NOT USEFUL for BETA Diversity comaprions among GIWs
 # Now create the mob object
 wet_mob <- make_mob_in(wet_comm_filt, plot_attr = env_filt, coord_names = c('LONGITUDE', 'LATITUDE'))
 

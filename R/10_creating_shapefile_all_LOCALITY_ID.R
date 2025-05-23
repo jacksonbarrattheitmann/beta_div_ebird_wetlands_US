@@ -28,7 +28,7 @@ s_not_shared_checklists <- test_wet_filt_check %>%
   tidyr::replace_na(list(GROUP_IDENTIFIER="not shared")) %>%
   dplyr::filter(GROUP_IDENTIFIER == "not shared")
 
-s_group_dat_trim <- s_all_data_cleaned %>%
+s_group_dat_trim <- test_wet_filt_check %>%
   filter(!duplicated(GROUP_IDENTIFIER))
 
 s_final <- s_not_shared_checklists %>%
@@ -52,7 +52,7 @@ wet_filt_25 <- wet_filt %>%
 # create a buffer distance to characterize the site
 wet_sf <- st_as_sf(wet_filt_25, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
 
-wet_sf_1km <- st_buffer(wet_sf, dist = 1000)
+wet_sf_1km <- st_buffer(wet_sf, dist = 250)
 
 plot(wet_sf_1km)
 
