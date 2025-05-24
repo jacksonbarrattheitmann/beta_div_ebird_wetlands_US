@@ -8,6 +8,8 @@ library(sf)
 
 test_wet <- readRDS("Data/eBird_data_by_ref_wetland/L1009347.RDS")
 
+master_gamma <- readRDS("Data/processed_buffer_chunks_with_ref_wetland/master_list_gamma_ref.RDS")
+
 # first let's just get rid of all the checklists
 # that are greater than 1KM in effort_distance
 # or took over 240 minutes in Duration
@@ -61,3 +63,13 @@ wet_sf_1km <- wet_sf_1km %>%
 
 # Now we can save this as a shapefile
 write_sf(wet_sf_1km, "Data/1km_ebird_buffers/L1009347.shp")
+
+
+
+
+# Creating a shapefile of ALL possible EBIRD HOTSPOTS at GAMMA scale
+
+gamma_sf <- st_as_sf(master_gamma, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+
+saveRDS(gamma_sf, "Data/1km_ebird_buffers/all_gammas_sf_point.RDS")
+
