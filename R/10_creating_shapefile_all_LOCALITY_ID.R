@@ -71,5 +71,7 @@ write_sf(wet_sf_1km, "Data/1km_ebird_buffers/L1009347.shp")
 
 gamma_sf <- st_as_sf(master_gamma, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
 
+st_write(gamma_sf, "Data/1km_ebird_buffers/all_shps.shp", driver = "ESRI Shapefile")
+
 saveRDS(gamma_sf, "Data/1km_ebird_buffers/all_gammas_sf_point.RDS")
 
