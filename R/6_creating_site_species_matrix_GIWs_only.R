@@ -4,6 +4,8 @@ library(dplyr)
 library(tidyverse)
 library(vegan)
 library(mobr)
+library(ggplot2)
+library(betapart)
 
 # First let's read in all the GIW data as a single dataframe
 
@@ -65,7 +67,6 @@ test <- check_samples %>%
 
 # Now we can filter our wet_dat to only include SAMPLING_EVENT_IDENTIFIERS in
 # check_smaples
-
 wet_dat_73 <- wet_dat %>%
   filter(SAMPLING_EVENT_IDENTIFIER %in% check_samples$SAMPLING_EVENT_IDENTIFIER) %>%
   group_by(LOCALITY_ID, COMMON_NAME) %>%
@@ -77,7 +78,7 @@ wet_dat_73 <- wet_dat %>%
 # getting rid of LOCALITY_ID as a column, just species
 wet_comm <- wet_dat_73[ , 2:514]
 
-# Have to make sure the row.names are equivlaent
+# Have to make sure the row.names are equivalent
 row.names(wet_comm) <- wet_dat_73$LOCALITY_ID
 
 
@@ -131,6 +132,114 @@ ggplot() + geom_point(data = div_env, aes(x = NA_L1NAME, y = value, color = NA_L
 
 whit_beta <- betadiver(wet_comm_filt, "w")
 
+# this is whitaker's beta between all GIWs mean
+mean(whit_beta)
+
+# Probably need to break this into separate ecoregions
+# then calculate Bray-Curtis or Whittaker's beta
+
+# Eastern Temp Forests first
+
+env_filt_ETF <- env %>%
+  group_by(NA_L1NAME) %>%
+  filter(NA_L1NAME == "EASTERN TEMPERATE FORESTS")
+
+wet_comm_ETF <- wet_dat_73 %>%
+  filter(LOCALITY_ID %in% env_filt_ETF$LOCALITY_ID)
+
+env_filt_ETF <- env_filt_ETF %>%
+  column_to_rownames(var = "LOCALITY_ID")
+
+wet_comm_ETF <- wet_comm_ETF %>%
+  column_to_rownames(var = "LOCALITY_ID")
+
+# Compute gamma (522)
+gamma_ETF <- as.numeric(length(wet_comm_ETF))
+
+# Compute alpha bar (110)
+alpha_bar <- wet_comm_ETF %>%
+  mutate(richness = rowSums(. > 0)) %>% 
+  summarise(mean_richness = mean(richness)) %>%
+  pull(mean_richness) %>%
+  as.numeric()
+  
+# Now we can try to compute Whitaker's Beta
+# for just EASTERN TEMPERATE FORESTS as a test
+
+beta_ETF <- betadiver(wet_comm_ETF, "w")
+# mean beta between all sites
+# 0.37 = low turnover
+median(beta_ETF)
+
+# Try Sorenson's
+beta_ETF_S <- betadiver(wet_comm_ETF, method = 11)
+
+mean(beta_ETF_S)
+
+# breaking up nestedness and turnover
+bas_S <- nestedbetajac(wet_comm_ETF)
+bas_S
+
+nestedchecker(wet_comm_ETF)
+
+# Here we can measure what the mean distance is (Bray-Curtis)
+dist_beta <- as.data.frame(mean(vegdist(wet_comm_ETF, "bray")))
+
+# Then compute a null model to compare
+meandist <- function(x) mean(vegdist(x, "bray"))
+mbc1 <- oecosimu(wet_comm_ETF, meandist, "r2dtable")
+
+# PLotting
+sim_vals <- as.numeric(mbc1$oecosimu$simulated)
+obs_val <- mbc1$statistic
+null_mean <- mean(sim_vals)
+
+# Create histogram with breaks that include observed value
+breaks_seq <- seq(min(sim_vals), max(c(sim_vals, obs_val)) + 0.05, length.out = 20)
+
+hist(sim_vals,
+     main = "Null distribution of mean Bray-Curtis dissimilarity",
+     xlab = "Simulated mean dissimilarity",
+     col = "lightgray",
+     border = "white",
+     breaks = breaks_seq,
+     xlim = c(min(breaks_seq), max(breaks_seq)))
+
+# Add vertical lines
+abline(v = obs_val, col = "red", lwd = 2)
+abline(v = null_mean, col = "blue", lwd = 2, lty = 2)
+
+# Add legend with both values
+legend("top", 
+       legend = c(paste("Observed =", round(obs_val, 4)),
+                  paste("Null mean =", round(null_mean, 4))),
+       col = c("red", "blue"), 
+       lwd = 2, 
+       lty = c(1, 2),
+       bty = "n")
+
+
+# now we can try betadispersion in vegan
+
+beta_ETF_dis <- betadisper(beta_ETF, env_filt_ETF$NA_L2NAME, "median")
+
+plot(beta_ETF_dis)
+
+anova(beta_ETF_dis)
+TukeyHSD((beta_ETF_dis))
+
+
+
+
+
+
+
+
+
+
+
+
+## Not sure how useful all of this is
 beta_NA <- betadisper(whit_beta, env_filt$NA_L1NAME, type = "median")
 
 mod <- anova(beta_NA)
@@ -148,22 +257,6 @@ plot(beta_NA, ellipse = TRUE, hull = FALSE, conf = 0.90) # 90% data ellipse
 boxplot(beta_NA)
 
 
-#### THIS MAY BE UNNECASSARY and NOT USEFUL for BETA Diversity comaprions among GIWs
-# Now create the mob object
-wet_mob <- make_mob_in(wet_comm_filt, plot_attr = env_filt, coord_names = c('LONGITUDE', 'LATITUDE'))
-
-# Take a long time to run, so I have this saved as an RDS below for loading into R
-
-# beta_results <- get_delta_stats(wet_mob, env_var = "NA_L1NAME", stats = "betas", type = 'discrete',
-#                                 log_scale = TRUE)
-
-# saveRDS(beta_results, "Data/beta_results.RDS")
-
-beta_results <- readRDS("Data/beta_results.RDS")
-
-plot(beta_results, stat = 'b1')
-
-betas <- beta_results$S_df
 
 
 
