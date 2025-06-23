@@ -98,45 +98,42 @@ env_filt <- env_filt %>%
 env_filt <- env_filt %>%
   column_to_rownames(var = "LOCALITY_ID")
 
-## Try just making the calc_biodiv object
-## for exploration of the data
+## Let's use the mobr framework as Dan suggested
+## 
 
-biodiv_comm_alpha <- calc_biodiv(wet_comm, groups = env$LOCALITY_ID, 
-                                 index = c('N', 'S', 'S_n', 'S_PIE'), 
-                                 effort = 50,
-                                 extrapolate = FALSE)
+wet_mob <- make_mob_in(wet_comm_filt, env_filt, coord_names = c("LONGITUDE", "LATITUDE"))
+calc_beta_div(wet_comm_filt, 'S_C')  # this is beta_C for the entire matrix
+calc_beta_div(wet_comm_filt, 'S_C', C_target_gamma = 0.5)  # at 50% coverage 
 
-# Need to join this object with the env data, to plot the S, S_n, and S_PIE
-# within each ecoregion
-
-div_env <- biodiv_comm_alpha %>%
-  rename(LOCALITY_ID = group) %>%
-  inner_join(env, by = "LOCALITY_ID")
-
-# Calculating the means for plotting
-mean_data <- div_env %>%
-  group_by(index, NA_L1NAME) %>%
-  summarise(mean_value = mean(value), .groups = "drop")
-
-# Now we can plot each of the metrics within the ecoregion, along with the mean
-# so that we can try and interpret the betas below
-
-ggplot() + geom_point(data = div_env, aes(x = NA_L1NAME, y = value, color = NA_L1NAME)) +
-  geom_point(data = mean_data, aes(x = NA_L1NAME, y = mean_value), color = "red", size = 3) +
-  facet_wrap(~index, scales = "free_y") +
-  theme(axis.text = element_text(angle = 90))
+# need to use calc_comm_div
 
 
-## Trying to use Vegan to calculate beta diversity patterns among all 
-## GIWs then maybe we can plot these against each other by ecoregion
+wet_div <- tibble(wet_comm_filt) %>% 
+  group_by(group = env_filt$NA_L1NAME) %>% 
+  group_modify(~ calc_comm_div(.x, index = c('N','S','S_n', 'S_PIE', 'S_C'), effort = 25,
+                               extrapolate = TRUE), scales = c("alpha", "gamma", "beta"))
 
-whit_beta <- betadiver(wet_comm_filt, "w")
+# then plot using plot_comm_div
+plot_comm_div(wet_div, multi_panel = FALSE)
 
-# this is whitaker's beta between all GIWs mean
-mean(whit_beta)
 
-# Probably need to break this into separate ecoregions
-# then calculate Bray-Curtis or Whittaker's beta
+## Trying to make the plot in ggplot to customize visuals
+
+wet_div %>%
+  filter(index == "S_C" | index == "beta_S_C") %>%
+ggplot() +
+  geom_boxplot(aes(x = group, y = value, color = group)) +
+  facet_wrap(~scale, scales = 'free_y') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none")
+
+
+## printing the beta_S_C data
+
+wet_div %>%
+  filter(index == "beta_S_C")
+
+
 
 # Eastern Temp Forests first
 
