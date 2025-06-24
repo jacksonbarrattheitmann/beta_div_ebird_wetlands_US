@@ -65,8 +65,21 @@ test <- check_samples %>%
   summarize(num = length(unique(SAMPLING_EVENT_IDENTIFIER))) %>%
   filter(num != 73)
 
+# Here is the dataframe with all the checklist data
+all_wet_check_73 <- wet_dat %>%
+  filter(SAMPLING_EVENT_IDENTIFIER %in% check_samples$SAMPLING_EVENT_IDENTIFIER) %>%
+  group_by(SAMPLING_EVENT_IDENTIFIER, LOCALITY_ID, COMMON_NAME) %>%
+  summarize(
+    count = sum(OBSERVATION_COUNT)
+  ) %>%
+  pivot_wider(names_from = COMMON_NAME, values_from = count, values_fill = 0)
+
+
+saveRDS(all_wet_check_73, "Intermediate_data/all_wet_check_summarized.RDS")
+
+
 # Now we can filter our wet_dat to only include SAMPLING_EVENT_IDENTIFIERS in
-# check_smaples
+# check_samples
 wet_dat_73 <- wet_dat %>%
   filter(SAMPLING_EVENT_IDENTIFIER %in% check_samples$SAMPLING_EVENT_IDENTIFIER) %>%
   group_by(LOCALITY_ID, COMMON_NAME) %>%
@@ -75,28 +88,21 @@ wet_dat_73 <- wet_dat %>%
   ) %>%
  pivot_wider(names_from = COMMON_NAME, values_from = count, values_fill = 0)
 
-# getting rid of LOCALITY_ID as a column, just species
-wet_comm <- wet_dat_73[ , 2:514]
+# Now we need to filter out the ecoregions with less than 10 GIWs
 
-# Have to make sure the row.names are equivalent
-row.names(wet_comm) <- wet_dat_73$LOCALITY_ID
+env_filt_10_GIWs <- env %>%
+  group_by(NA_L1NAME) %>%
+  filter(NA_L1NAME == "EASTERN TEMPERATE FORESTS" | NA_L1NAME == "GREAT PLAINS" |
+           NA_L1NAME == "MARINE WEST COAST FOREST" | NA_L1NAME == "MEDITERRANEAN CALIFORNIA" |
+           NA_L1NAME == "NORTH AMERICAN DESERTS")
+
+wet_comm_10_GIWs <- wet_dat_73 %>%
+  filter(LOCALITY_ID %in% env_filt_10_GIWs$LOCALITY_ID)
+
+saveRDS(env_filt_10_GIWs, "Intermediate_data/env_ecoregions_10_GIWs.RDS")
+saveRDS(wet_comm_10_GIWs, "Intermediate_data/wet_comm_ecoregion_10_summarized.RDS")
 
 
-# WE have 1 ecoregion with only 1 site, likley need to filter it out for mobr
-# L879018 is the LOCALITY_ID
-
-wet_comm_filt <- wet_dat_73 %>%
-  filter(LOCALITY_ID != "L879018")
-
-wet_comm_filt <- wet_comm_filt %>%
-  column_to_rownames(var = "LOCALITY_ID")
-
-# Make the row names the same for env_filt and wet_coords
-env_filt <- env_filt %>%
-  filter(LOCALITY_ID != "L879018")
-
-env_filt <- env_filt %>%
-  column_to_rownames(var = "LOCALITY_ID")
 
 ## Let's use the mobr framework as Dan suggested
 ## 
@@ -107,6 +113,7 @@ calc_beta_div(wet_comm_filt, 'S_C', C_target_gamma = 0.5)  # at 50% coverage
 
 # need to use calc_comm_div
 
+calc_C_target(wet_comm_filt)
 
 wet_div <- tibble(wet_comm_filt) %>% 
   group_by(group = env_filt$NA_L1NAME) %>% 
@@ -124,9 +131,10 @@ wet_div %>%
 ggplot() +
   geom_boxplot(aes(x = group, y = value, color = group)) +
   facet_wrap(~scale, scales = 'free_y') +
+  theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position = "none")
-
+        legend.position = "none") +
+  ylab("S_C metric")
 
 ## printing the beta_S_C data
 
