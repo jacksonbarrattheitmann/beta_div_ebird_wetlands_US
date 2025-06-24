@@ -78,6 +78,13 @@ all_wet_check_73 <- wet_dat %>%
 saveRDS(all_wet_check_73, "Intermediate_data/all_wet_check_summarized.RDS")
 
 
+# Need to create a env_file that had the same number of rows
+env_all_wet_check <- all_wet_check_73 %>%
+  select(LOCALITY_ID) %>%
+  left_join(env, by = "LOCALITY_ID")
+
+saveRDS(env_all_wet_check, "Intermediate_data/env_all_wet_check.RDS")
+
 # Now we can filter our wet_dat to only include SAMPLING_EVENT_IDENTIFIERS in
 # check_samples
 wet_dat_73 <- wet_dat %>%
@@ -100,6 +107,7 @@ wet_comm_10_GIWs <- wet_dat_73 %>%
   filter(LOCALITY_ID %in% env_filt_10_GIWs$LOCALITY_ID)
 
 saveRDS(env_filt_10_GIWs, "Intermediate_data/env_ecoregions_10_GIWs.RDS")
+saveRDS(wet_dat_73, "Intermediate_data/wet_comm_all_summarized.RDS")
 saveRDS(wet_comm_10_GIWs, "Intermediate_data/wet_comm_ecoregion_10_summarized.RDS")
 
 
