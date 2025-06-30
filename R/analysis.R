@@ -58,6 +58,7 @@ ggplot() +
   theme(legend.position = "none") +
   ylab("Value")
 
+# need to add the GIW area per state as an explanatory variable
 
 ###### building a model to explain variation in aggregation ############
 wet_div_betas_filt <- wet_div_betas %>%
@@ -69,7 +70,7 @@ data_mod <- env %>%
   full_join(wet_div_betas_filt, by = "LOCALITY_ID")
 
 
-mod <- glm(value ~ built_wet + flooded_vegetation_wet + area_sqkm + shan_wet + trees_wet, 
+mod <- glm(value ~ built_wet + flooded_vegetation_wet + area_sqkm + shan_wet + evi_mean, 
            family = quasipoisson(), data = data_mod)
 summary(mod)
 check_model(mod)
