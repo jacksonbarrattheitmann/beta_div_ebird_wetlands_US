@@ -115,18 +115,24 @@ wet_div_error <- wet_div %>%
 # Plotting the results
 ggplot() +
   geom_jitter(data = wet_div, aes(x = index, y = value), alpha = 0.5, width = 0.2) +
-  geom_point(data = wet_div_betas, aes(x = index, y = median(value), color = "red")) +
-  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.1), color = "red") +
+  geom_point(data = wet_div_error, aes(x = index, y = mean, color = "red"), size = 3, alpha = 1) +
+  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "red", linewidth = 1) +
   geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
   theme_bw() +
   theme(legend.position = "none") +
-  ylab("Value")
+  ylab("Value") +
+  xlab("Diversity Index") +
+  scale_x_discrete(labels = c(
+    "beta_S" = "βS",
+    "beta_S_n" = "βSn",
+    "beta_S_PIE" = "βSPIE", 
+    "beta_S_C" = "βC"))
 
 
 # Plotting as geom_col
 ggplot(wet_div_error, aes(x = index, y = mean)) +
   geom_col(fill = "skyblue") +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "red") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.3, color = "red") +
   geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
   theme_bw() +
   ylab("Value") +
@@ -150,9 +156,24 @@ data_mod <- env %>%
   full_join(wet_div_betas_filt, by = "LOCALITY_ID")
 
 
-mod <- glm(value ~ built_wet + flooded_vegetation_wet + area_sqkm + shan_wet + evi_mean, 
-           family = quasipoisson(), data = data_mod)
+mod <- lm(value ~ built_wet + flooded_vegetation_wet + area_sqkm + shan_wet + evi_mean + water_25km, data = data_mod)
 summary(mod)
 check_model(mod)
 
-plot(log(data_mod$area_sqkm), data_mod$value)
+# wetland area
+ggplot(data = data_mod) +
+  geom_point(aes(x = log(area_sqkm*1000), y = value)) +
+  geom_smooth(aes(x = log(area_sqkm*1000), y = value), method = "lm") +
+  theme_bw()
+
+# EVI
+ggplot(data = data_mod) +
+  geom_point(aes(x = evi_mean, y = value)) +
+  geom_smooth(aes(x = evi_mean, y = value), method = "lm") +
+  theme_bw()
+
+# habitat heterogeneity
+ggplot(data = data_mod) +
+  geom_point(aes(x = shan_wet, y = value)) +
+  geom_smooth(aes(x = shan_wet, y = value), method = "lm") +
+  theme_bw()
