@@ -19,6 +19,8 @@ wet_coords <- wet_dat %>%
   select(LOCALITY_ID, LONGITUDE, LATITUDE) %>%
   distinct()
 
+#saveRDS(wet_coords, "Intermediate_data/locality_ids_long_lat.RDS")
+
 # let's subset to make this managebale
 
 env_filt <- env %>%

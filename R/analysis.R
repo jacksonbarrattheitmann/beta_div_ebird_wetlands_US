@@ -43,26 +43,16 @@ betas_fin <- cbind(betas, beta_traditional) %>%
                names_to = "index", values_to = "value")
 ########## PLOTS for OBJECTIVE 1 ##################
 
-ggplot(data = betas_fin) +
-  geom_col(aes(x = index, y = value, fill = index)) + theme_bw() +
+ggplot(data = betas_ALL) +
+  geom_col(aes(x = index, y = value), fill = "lightblue") + theme_bw() +
   geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
   xlab("Beta Diversity Index") +
   ylab("Value") +
-  scale_fill_manual(values = c(
-    "beta_S" = "dodgerblue",
-    "beta_S_n" = "dodgerblue",
-    "beta_S_PIE" = "dodgerblue", 
-    "beta_S_C" = "dodgerblue",
-    "Jaccard's Index" = "orange",
-    "Whitaker_beta" = "orange"
-  )) +
   scale_x_discrete(  labels = c(
     "beta_S" = "βS",
     "beta_S_n" = "βSn",
     "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC",
-    "Jaccard's Index" = "Jaccard's Index",
-    "Whitaker_beta" = "Whittaker's Beta"
+    "beta_S_C" = "βC"
   )) +
   theme(legend.position = "none",
         axis.title.x = element_text(
@@ -114,10 +104,10 @@ wet_div_error <- wet_div %>%
 
 # Plotting the results
 ggplot() +
-  geom_jitter(data = wet_div, aes(x = index, y = value), alpha = 0.5, width = 0.2) +
-  geom_point(data = wet_div_error, aes(x = index, y = mean, color = "red"), size = 3, alpha = 1) +
-  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "red", linewidth = 1) +
-  geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
+  geom_jitter(data = wet_div, aes(x = index, y = value), alpha = 0.25, width = 0.2) +
+  geom_point(data = wet_div_error, aes(x = index, y = mean), color = "darkred", size = 3, alpha = 1) +
+  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "darkred", linewidth = 1) +
+  geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   theme_bw() +
   theme(legend.position = "none") +
   ylab("Value") +
@@ -177,3 +167,6 @@ ggplot(data = data_mod) +
   geom_point(aes(x = shan_wet, y = value)) +
   geom_smooth(aes(x = shan_wet, y = value), method = "lm") +
   theme_bw()
+
+
+
