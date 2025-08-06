@@ -127,9 +127,17 @@ ggplot() +
   geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
   facet_wrap(~NA_L1NAME) +
   theme_bw() +
-  theme(legend.position = "none")
+  theme(legend.position = "none")  +
+  ylab("Value") +
+  xlab("Beta Diversity Index") +
+  scale_x_discrete(labels = c(
+    "beta_S" = "βS",
+    "beta_S_n" = "βSn",
+    "beta_S_PIE" = "βSPIE", 
+    "beta_S_C" = "βC"))
 
-
+ggsave("FigX_betas_ECOREGION_scale.png", width = 8, height = 6,
+       bg = "transparent")
 
 ## the model
 

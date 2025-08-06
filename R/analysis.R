@@ -8,6 +8,8 @@ library(ggplot2)
 library(betapart)
 library(lme4)
 library(performance)
+library(tibble)
+library(scales)
 
 ######### OBJETICVE 1 - CONTINENTAL SCALE ########
 ######### ALL GIWs beta ##############
@@ -15,6 +17,47 @@ library(performance)
 wet_all <- readRDS("Intermediate_data/wet_comm_all_summarized.RDS") %>%
   column_to_rownames(var = "LOCALITY_ID")
 
+env_eco <- readRDS("Intermediate_data/env_ecoregions_10_GIWs.RDS") 
+
+## A simple calculation of proportion of total # of species within each wetland
+## with gamma at the continental scale
+
+wet_prop <- wet_all %>%
+  rowwise() %>%
+  mutate(alpha = sum(c_across(everything()) > 0)) %>%
+  ungroup()
+
+wet_prop <- wet_prop[, 529] %>%
+  mutate(gamma = 528,
+         prop_total = alpha/gamma)
+
+row.names(wet_prop) <- row.names(wet_all)
+
+wet_prop <- wet_prop %>%
+tibble::rownames_to_column(var = "LOCALITY_ID")
+
+##### Now I need to join this small data frame with the env data for plotting
+
+env_prop <- wet_prop %>%
+  left_join(env_eco, by = "LOCALITY_ID")
+
+env_prop <- env_prop %>%
+  filter(!is.na(NA_L1NAME)) %>%
+  group_by(NA_L1NAME) %>%
+  mutate(mean_prop = mean(prop_total))
+
+ggplot(data = env_prop) +
+  geom_jitter(aes(x = NA_L1NAME , y = prop_total, color = NA_L1NAME)) +
+  geom_point(aes(x = NA_L1NAME, y = mean_prop), color = "black", size = 2) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "none") +
+  xlab("") +
+  ylab("Proportion of all species within a wetland")
+
+
+
+## The mobR approach
 betas_ALL <- calc_comm_div(wet_all, index = c('S','S_n','S_PIE', 'S_C'),
                              extrapolate = TRUE, effort = 25, scales = c("beta"), C_target_gamma = 0.75)
 
@@ -44,7 +87,7 @@ betas_fin <- cbind(betas, beta_traditional) %>%
 ########## PLOTS for OBJECTIVE 1 ##################
 
 ggplot(data = betas_ALL) +
-  geom_col(aes(x = index, y = value), fill = "lightblue") + theme_bw() +
+  geom_col(aes(x = index, y = value), fill = "skyblue") + theme_bw() +
   geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
   xlab("Beta Diversity Index") +
   ylab("Value") +
@@ -60,6 +103,9 @@ ggplot(data = betas_ALL) +
         axis.title.y = element_text(
           margin = margin(r = 15)))
 
+
+ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
+       bg = "transparent")
 
 ######### OBJECTIVE 3 - GIW scale ############
 ######### Within GIW beta diversity analysis ##########
@@ -126,47 +172,72 @@ ggplot(wet_div_error, aes(x = index, y = mean)) +
   geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
   theme_bw() +
   ylab("Value") +
-  xlab("Diversity Index") +
+  xlab("Beta Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S" = "βS",
     "beta_S_n" = "βSn",
     "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC"))
+    "beta_S_C" = "βC")) +
+  theme(legend.position = "none",
+        axis.title.x = element_text(
+          margin = margin(t = 15)),
+        axis.title.y = element_text(
+          margin = margin(r = 15)))
 
+ggsave("FigX_betas_WETLAND_scale.png", width = 6, height = 4,
+       bg = "transparent")
 
 # need to add the GIW area per state as an explanatory variable
 
 ###### building a model to explain variation in aggregation ############
-wet_div_betas_filt <- wet_div_betas %>%
+wet_div_betas_filt <- wet_div %>%
   rename(LOCALITY_ID = group)
 
 # first I need to append the beta stats into a table with the env data
 data_mod <- env %>%
   distinct(LOCALITY_ID, .keep_all = TRUE) %>%
   full_join(wet_div_betas_filt, by = "LOCALITY_ID")
+  
 
-
-mod <- lm(value ~ built_wet + flooded_vegetation_wet + area_sqkm + shan_wet + evi_mean + water_25km, data = data_mod)
-summary(mod)
-check_model(mod)
+for (idx in unique(data_mod$index)) {
+  cat("\n===== Index:", idx, "=====\n")
+  
+  df <- data_mod %>% filter(index == idx)
+  
+  mod <- lm(value ~ rescale(built_wet) + rescale(water_wet) + rescale(log10(area_sqkm)) + 
+               rescale(shan_wet) + rescale(evi_mean) + rescale(water_25km) + rescale(built_25km) +
+              rescale(shan_gamma_25), data = df)
+  print(summary(mod))
+  print(check_model(mod))
+  
+}
 
 # wetland area
-ggplot(data = data_mod) +
+data_mod %>%
+  filter(index == "beta_S") %>%
+ggplot() +
   geom_point(aes(x = log(area_sqkm*1000), y = value)) +
   geom_smooth(aes(x = log(area_sqkm*1000), y = value), method = "lm") +
   theme_bw()
 
 # EVI
-ggplot(data = data_mod) +
+ggplot(data = df) +
   geom_point(aes(x = evi_mean, y = value)) +
   geom_smooth(aes(x = evi_mean, y = value), method = "lm") +
   theme_bw()
 
 # habitat heterogeneity
-ggplot(data = data_mod) +
+ggplot(data = df) +
   geom_point(aes(x = shan_wet, y = value)) +
   geom_smooth(aes(x = shan_wet, y = value), method = "lm") +
   theme_bw()
 
+# Water 25km
+data_mod %>%
+  filter(index == "beta_S") %>%
+  ggplot() +
+  geom_point(aes(x = water_25km, y = value)) +
+  geom_smooth(aes(x = water_25km, y = value), method = "lm") +
+  theme_bw()
 
 
