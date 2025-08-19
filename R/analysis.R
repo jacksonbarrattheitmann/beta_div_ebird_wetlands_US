@@ -11,7 +11,7 @@ library(performance)
 library(tibble)
 library(scales)
 
-######### OBJETICVE 1 - CONTINENTAL SCALE ########
+######### OBJECTIVE 1 - CONTINENTAL SCALE ########
 ######### ALL GIWs beta ##############
 
 wet_all <- readRDS("Intermediate_data/wet_comm_all_summarized.RDS") %>%

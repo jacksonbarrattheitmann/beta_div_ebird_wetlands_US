@@ -18,7 +18,8 @@ usa_states <- states(cb = TRUE)
 
 # Filter to 50 states only if needed
 usa_states <- usa_states %>%
-  filter(!STUSPS %in% c("AS", "GU", "MP", "PR", "VI", "AK", "HI"))  # Remove territories and HI and AK
+  filter(!STUSPS %in% c("AS", "GU", "MP", "PR", "VI", "AK", "HI"))  
+# Remove territories and HI and AK
 
 usa_outline <- usa_states %>% 
   st_union() %>% 
@@ -104,7 +105,4 @@ legend("bottom",
        cex = 0.75,             # Smaller text
        inset = c(0, -0.05), 
        xpd = TRUE)   
-
-
-
 
