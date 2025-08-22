@@ -19,6 +19,12 @@ wet_all <- readRDS("Intermediate_data/wet_comm_all_summarized.RDS") %>%
 
 env_eco <- readRDS("Intermediate_data/env_ecoregions_10_GIWs.RDS") 
 
+
+# number of GIWs per ecoregion when we have the 
+# 10 GIWs per ecoregion rule
+env_eco %>%
+  count(NA_L1NAME, sort = TRUE)
+
 ## A simple calculation of proportion of total # of species within each wetland
 ## with gamma at the continental scale
 
@@ -84,6 +90,7 @@ beta_traditional <- cbind(beta_jac, beta_whittaker) %>%
 betas_fin <- cbind(betas, beta_traditional) %>%
   pivot_longer(cols = c("beta_S", "beta_S_n", "beta_S_PIE", "beta_S_PIE", "beta_S_C", "Whitaker_beta", "Jaccard's Index"), 
                names_to = "index", values_to = "value")
+
 ########## PLOTS for OBJECTIVE 1 ##################
 
 ggplot(data = betas_ALL) +
@@ -112,6 +119,18 @@ ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
 
 #read in env and wet_comm data
 env <- readRDS("Intermediate_data/env_all_wet_check.RDS")
+
+## getting the number of wetlands per ecoregion
+## without the 10 GIWs per ecoregion rule in place
+
+test <- env[, 2:52] %>%
+  distinct(LOCALITY_ID, .keep_all = TRUE) %>%
+  count(NA_L1NAME)
+
+test <- test %>%
+  group_by(NA_L1NAME) %>%
+  mutate(sum(n)) %>%
+  distinct(NA_L1NAME, .keep_all = TRUE)
 
 wet_dat <- readRDS("Intermediate_data/all_wet_check_summarized.RDS")
 

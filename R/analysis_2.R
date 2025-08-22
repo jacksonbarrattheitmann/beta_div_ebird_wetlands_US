@@ -5,6 +5,10 @@ library(geosphere)
 library(purrr)
 library(sf)
 library(units)
+library(ggplot2)
+library(tibble)
+library(multcompView)
+library(broom)
 
 ####### OBJECTIVE 2 - ECOREGION scale ##########
 wet_eco <- readRDS("Intermediate_data/wet_comm_ecoregion_10_summarized.RDS") %>%
@@ -109,7 +113,9 @@ calculate_beta_ecoregion_sf <- function(wet_eco, env_eco, n_reps = 999, effort =
   return(results_df)
 }
 
-beta_results <- calculate_beta_ecoregion_sf(wet_eco, env_eco, n_reps = 100)
+beta_results <- calculate_beta_ecoregion_sf(wet_eco, env_eco, n_reps = 999)
+
+saveRDS(beta_results, "Data/beta_results.RDS")
 
 # error bars confidence intervals 95%
 beta_div_error <- beta_results %>%
@@ -146,15 +152,33 @@ for (idx in unique(beta_results$index)) {
   
   df <- beta_results %>% filter(index == idx)
   
+  # Fit ANOVA model
   aov_model <- aov(value ~ NA_L1NAME, data = df)
   print(summary(aov_model))
   
+  # Tukey HSD
   tukey <- TukeyHSD(aov_model)
   print(tukey)
   
-  # Plot with title
-  plot(tukey, las = 1)
-  title(main = paste("Tukey HSD –", idx))
+  # Tidy the Tukey output for ggplot
+  tukey_df <- as.data.frame(tukey$NA_L1NAME)
+  tukey_df$Comparison <- rownames(tukey_df)
+  rownames(tukey_df) <- NULL
+  
+  # Plot with ggplot
+  p <- ggplot(tukey_df, aes(x = reorder(Comparison, diff), y = diff)) +
+    geom_point(size = 3) +
+    geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+    coord_flip() +
+    labs(
+      title = paste("Tukey HSD –", idx),
+      x = "Comparison",
+      y = "Difference in Means"
+    ) +
+    theme_minimal(base_size = 14)
+  
+  print(p)
 }
 
    
