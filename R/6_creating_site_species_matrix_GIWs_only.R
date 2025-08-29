@@ -113,165 +113,29 @@ saveRDS(wet_dat_73, "Intermediate_data/wet_comm_all_summarized.RDS")
 saveRDS(wet_comm_10_GIWs, "Intermediate_data/wet_comm_ecoregion_10_summarized.RDS")
 
 
+#### Let's subset these data few different ways for our 
+#### analysis besides just using all 73 checklists aggregated
 
-## Let's use the mobr framework as Dan suggested
-## 
+# first let's deal with temporal bias
+# so let's deal with just a single summer of data 2021
+## and by filtering to only stationary checklists
+sum_check_stat <- wet_dat %>%
+  group_by(LOCALITY_ID) %>%
+  filter(PROTOCOL_TYPE == "Stationary") %>%
+  filter(OBSERVATION_DATE >= as.Date("2021-05-01") & OBSERVATION_DATE <= as.Date("2021-08-30")) %>%
+  filter(DURATION_MINUTES < 60) %>%
+  mutate(num_check = length(unique(SAMPLING_EVENT_IDENTIFIER))) 
 
-wet_mob <- make_mob_in(wet_comm_filt, env_filt, coord_names = c("LONGITUDE", "LATITUDE"))
-calc_beta_div(wet_comm_filt, 'S_C')  # this is beta_C for the entire matrix
-calc_beta_div(wet_comm_filt, 'S_C', C_target_gamma = 0.5)  # at 50% coverage 
-
-# need to use calc_comm_div
-
-calc_C_target(wet_comm_filt)
-
-wet_div <- tibble(wet_comm_filt) %>% 
-  group_by(group = env_filt$NA_L1NAME) %>% 
-  group_modify(~ calc_comm_div(.x, index = c('N','S','S_n', 'S_PIE', 'S_C'), effort = 25,
-                               extrapolate = TRUE), scales = c("alpha", "gamma", "beta"))
-
-# then plot using plot_comm_div
-plot_comm_div(wet_div, multi_panel = FALSE)
+# Now let's remove LOCALITY_IDs that don't have at least 5 checklists
+# as that will be our bootstrap size
+sum_check_stat_filt <- sum_check_stat %>%
+  filter(num_check >= 5)
 
 
-## Trying to make the plot in ggplot to customize visuals
+##### Now we have a dataframe of checklists that meet our strict requirments #####
+##### Now we can save it and make a function to do our analysis in mobr ######
 
-wet_div %>%
-  filter(index == "S_C" | index == "beta_S_C") %>%
-ggplot() +
-  geom_boxplot(aes(x = group, y = value, color = group)) +
-  facet_wrap(~scale, scales = 'free_y') +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1),
-        legend.position = "none") +
-  ylab("S_C metric")
-
-## printing the beta_S_C data
-
-wet_div %>%
-  filter(index == "beta_S_C")
-
-
-
-# Eastern Temp Forests first
-
-env_filt_ETF <- env %>%
-  group_by(NA_L1NAME) %>%
-  filter(NA_L1NAME == "EASTERN TEMPERATE FORESTS")
-
-wet_comm_ETF <- wet_dat_73 %>%
-  filter(LOCALITY_ID %in% env_filt_ETF$LOCALITY_ID)
-
-env_filt_ETF <- env_filt_ETF %>%
-  column_to_rownames(var = "LOCALITY_ID")
-
-wet_comm_ETF <- wet_comm_ETF %>%
-  column_to_rownames(var = "LOCALITY_ID")
-
-# Compute gamma (522)
-gamma_ETF <- as.numeric(length(wet_comm_ETF))
-
-# Compute alpha bar (110)
-alpha_bar <- wet_comm_ETF %>%
-  mutate(richness = rowSums(. > 0)) %>% 
-  summarise(mean_richness = mean(richness)) %>%
-  pull(mean_richness) %>%
-  as.numeric()
-  
-# Now we can try to compute Whitaker's Beta
-# for just EASTERN TEMPERATE FORESTS as a test
-
-beta_ETF <- betadiver(wet_comm_ETF, "w")
-# mean beta between all sites
-# 0.37 = low turnover
-median(beta_ETF)
-
-# Try Sorenson's
-beta_ETF_S <- betadiver(wet_comm_ETF, method = 11)
-
-mean(beta_ETF_S)
-
-# breaking up nestedness and turnover
-bas_S <- nestedbetajac(wet_comm_ETF)
-bas_S
-
-nestedchecker(wet_comm_ETF)
-
-# Here we can measure what the mean distance is (Bray-Curtis)
-dist_beta <- as.data.frame(mean(vegdist(wet_comm_ETF, "bray")))
-
-# Then compute a null model to compare
-meandist <- function(x) mean(vegdist(x, "bray"))
-mbc1 <- oecosimu(wet_comm_ETF, meandist, "r2dtable")
-
-# PLotting
-sim_vals <- as.numeric(mbc1$oecosimu$simulated)
-obs_val <- mbc1$statistic
-null_mean <- mean(sim_vals)
-
-# Create histogram with breaks that include observed value
-breaks_seq <- seq(min(sim_vals), max(c(sim_vals, obs_val)) + 0.05, length.out = 20)
-
-hist(sim_vals,
-     main = "Null distribution of mean Bray-Curtis dissimilarity",
-     xlab = "Simulated mean dissimilarity",
-     col = "lightgray",
-     border = "white",
-     breaks = breaks_seq,
-     xlim = c(min(breaks_seq), max(breaks_seq)))
-
-# Add vertical lines
-abline(v = obs_val, col = "red", lwd = 2)
-abline(v = null_mean, col = "blue", lwd = 2, lty = 2)
-
-# Add legend with both values
-legend("top", 
-       legend = c(paste("Observed =", round(obs_val, 4)),
-                  paste("Null mean =", round(null_mean, 4))),
-       col = c("red", "blue"), 
-       lwd = 2, 
-       lty = c(1, 2),
-       bty = "n")
-
-
-# now we can try betadispersion in vegan
-
-beta_ETF_dis <- betadisper(beta_ETF, env_filt_ETF$NA_L2NAME, "median")
-
-plot(beta_ETF_dis)
-
-anova(beta_ETF_dis)
-TukeyHSD((beta_ETF_dis))
-
-
-
-
-
-
-
-
-
-
-
-
-## Not sure how useful all of this is
-beta_NA <- betadisper(whit_beta, env_filt$NA_L1NAME, type = "median")
-
-mod <- anova(beta_NA)
-
-permutest(beta_NA, pairwise = TRUE, permutations = 99)
-
-mod.HSD <- TukeyHSD(beta_NA)
-
-plot(mod.HSD)
-
-plot(beta_NA)
-
-plot(beta_NA, ellipse = TRUE, hull = FALSE, conf = 0.90) # 90% data ellipse
-
-boxplot(beta_NA)
-
-
+saveRDS(sum_check_stat_filt, "Intermediate_data/all_wet_check_filt_2021_summer.RDS")
 
 
 

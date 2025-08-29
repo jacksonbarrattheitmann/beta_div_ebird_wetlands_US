@@ -67,30 +67,6 @@ ggplot(data = env_prop) +
 betas_ALL <- calc_comm_div(wet_all, index = c('S','S_n','S_PIE', 'S_C'),
                              extrapolate = TRUE, effort = 25, scales = c("beta"), C_target_gamma = 0.75)
 
-# Classic Whittaker's beta diversity (global)
-sitespp_pa <- (wet_all > 0) * 1
-alpha <- rowSums(sitespp_pa)
-mean_alpha <- mean(alpha)
-gamma <- sum(colSums(sitespp_pa) > 0)
-
-beta_whittaker <- as.data.frame(gamma / mean_alpha - 1)
-
-# Jaccard's
-beta_dist <- vegdist(sitespp_pa, method = "jaccard", binary = TRUE)
-mean(beta_dist)
-
-beta_jac <- as.data.frame(mean(beta_dist))
-
-# Whit and Jac toghther in a single df
-beta_traditional <- cbind(beta_jac, beta_whittaker) %>%
-  rename("Whitaker_beta" = "gamma/mean_alpha - 1",
-         "Jaccard's Index" = "mean(beta_dist)")
-
-#combining them all toghther
-betas_fin <- cbind(betas, beta_traditional) %>%
-  pivot_longer(cols = c("beta_S", "beta_S_n", "beta_S_PIE", "beta_S_PIE", "beta_S_C", "Whitaker_beta", "Jaccard's Index"), 
-               names_to = "index", values_to = "value")
-
 ########## PLOTS for OBJECTIVE 1 ##################
 
 ggplot(data = betas_ALL) +
