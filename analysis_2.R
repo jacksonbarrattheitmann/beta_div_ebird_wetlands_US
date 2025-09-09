@@ -29,7 +29,7 @@ wet_all <- wet_all %>%
 ######### Within GIW beta diversity analysis ##########
 
 # We just need to slightly alter the function, to calculate betas WITHIN a single wetland
-# to see if we have high tunrover somply between checklists at the same wetland
+# to see if we have high tunrover simply between checklists at the same wetland
 
 
 calc_beta_within_site <- function(df, effort, seed) {
