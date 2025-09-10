@@ -10,8 +10,8 @@ library(lme4)
 library(performance)
 library(tibble)
 library(scales)
+library(modelsummary)
 
-# DATA
 wet_all <- readRDS("Intermediate_data/all_wet_check_for_analysis.RDS")
 
 env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
@@ -159,6 +159,7 @@ for (idx in unique(data_mod$index)) {
                rescale(shan_wet) + rescale(evi_mean) + rescale(water_25km) + rescale(built_25km) +
                rescale(shan_gamma_25), family = poisson, data = df)
   print(summary(mod))
+  modelsummary(mod, output = paste("model_table", idx, ".docx"))
   print(check_model(mod))
   
 }

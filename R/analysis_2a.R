@@ -90,6 +90,9 @@ calc_beta_within_site <- function(df, effort, seed) {
 
 betas_within_site <- calc_beta_within_site(wet_all, effort = 5, seed = 5)
 
+betas_within_site <- betas_within_site %>%
+  filter(!is.infinite(value))
+  
 
 # calculating the means and error bars for plotting
 wet_div_error <- betas_within_site %>%
