@@ -18,6 +18,12 @@ wet_all <- readRDS("Intermediate_data/all_wet_check_for_analysis.RDS")
 
 env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
 
+# need spatial coords for the LOCALITY_IDs
+wet_coords <- readRDS("Intermediate_data/locality_ids_long_lat.RDS")
+
+env <- env %>%
+  left_join(wet_coords, by = "LOCALITY_ID")
+
 ## Creating a dataframe with just the LOCALITY_ID and ECOREGION
 ## to append to the wet_all df
 
@@ -205,6 +211,8 @@ calc_beta_by_year_boot <- function(df, effort = 5, n_boot = 99, seed = NULL) {
 
 betas_boot <- calc_beta_by_year_boot(wet_all, effort = 5, n_boot = 25, seed = NULL)
 
+
+
 # calculating the means and error bars for plotting
 wet_div_error <- betas_boot %>%
   group_by(index) %>%
@@ -362,3 +370,78 @@ ggplot() +
   xlab("Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S_n" = "βSn"))
+
+
+
+######## RAREFACTION ###############
+
+plot_rarefaction_each_year_rarecurve <- function(df, effort = 5, step = 50, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  
+  years <- sort(unique(df$YEAR))
+  plots <- list()
+  
+  for (y in years) {
+    # 1️⃣ Filter sites with enough checklists
+    sites_ok <- df %>%
+      filter(YEAR == y) %>%
+      distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER) %>%
+      count(LOCALITY_ID, name = "n_checklists") %>%
+      filter(n_checklists >= effort) %>%
+      pull(LOCALITY_ID)
+    
+    if (length(sites_ok) < 2) next  # skip year if <2 sites
+    
+    # 2️⃣ Sample exactly `effort` checklists per site
+    df_sampled <- df %>%
+      filter(YEAR == y, LOCALITY_ID %in% sites_ok) %>%
+      distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER) %>%
+      group_by(LOCALITY_ID) %>%
+      slice_sample(n = effort) %>%
+      ungroup() %>%
+      inner_join(df %>% filter(YEAR == y), by = c("LOCALITY_ID", "SAMPLING_EVENT_IDENTIFIER"))
+    
+    # 3️⃣ Build site × species matrix
+    comm <- df_sampled %>%
+      group_by(LOCALITY_ID, COMMON_NAME) %>%
+      summarise(abundance = sum(OBSERVATION_COUNT, na.rm = TRUE), .groups = "drop") %>%
+      pivot_wider(names_from = COMMON_NAME, values_from = abundance, values_fill = 0) %>%
+      column_to_rownames("LOCALITY_ID")
+    
+    if (nrow(comm) < 2) next
+    
+    # 4️⃣ Pooled abundance vector for rarefaction
+    pooled_comm <- colSums(comm)
+    
+    # 5️⃣ Generate rarefaction data using rarecurve
+    # Use capture.output to avoid printing the base R plot
+    rare_df <- capture.output({
+      rc <- rarecurve(t(as.matrix(pooled_comm)), step = step, plot = FALSE)
+    })
+    
+    # rarecurve returns a list; each element contains a matrix of S vs sample size
+    # Convert to tidy data.frame for ggplot
+    rc_tidy <- map_dfr(rc, ~ {
+      tibble(
+        n_individuals = as.numeric(names(.x)),
+        S = as.numeric(.x)
+      )
+    })
+    
+    # 6️⃣ Plot with ggplot
+    p <- ggplot(rc_tidy, aes(x = n_individuals, y = S)) +
+      geom_line(color = "steelblue", size = 1) +
+      labs(
+        x = "Number of individuals",
+        y = "Expected species richness",
+        title = paste("Overall rarefaction curve -", y)
+      ) +
+      theme_minimal(base_size = 14)
+    
+    plots[[as.character(y)]] <- p
+  }
+  
+  return(plots)
+}
+
+plot_rarefaction_each_year_rarecurve(wet_all, effort = 5, seed = 5)
