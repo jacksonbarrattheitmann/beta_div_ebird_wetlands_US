@@ -72,9 +72,8 @@ calc_beta_by_year <- function(df, effort = 5, seed = NULL) {
       # Beta diversity
       beta_out <- calc_comm_div(
         comm,
-        index = c("S", "S_n", "S_PIE", "S_C"),
+        index = c("S", "S_PIE", "S_C"),
         extrapolate = TRUE,
-        effort = 25,
         scales = "beta",
         C_target_gamma = 0.75
       )
@@ -116,8 +115,8 @@ ggplot(data = betas_ALL) +
           margin = margin(r = 15)))
 
 
-ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
-       bg = "transparent")
+#ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
+#       bg = "transparent")
 
 
 ### Let's do one more sensitivity analysis

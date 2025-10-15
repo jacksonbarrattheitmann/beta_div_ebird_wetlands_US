@@ -29,7 +29,7 @@ wet_all <- wet_all %>%
 ######### Within GIW beta diversity analysis ##########
 
 # We just need to slightly alter the function, to calculate betas WITHIN a single wetland
-# to see if we have high tunrover somply between checklists at the same wetland
+# to see if we have high turnover simply between checklists at the same wetland
 
 
 calc_beta_within_site <- function(df, effort, seed) {
@@ -67,9 +67,8 @@ calc_beta_within_site <- function(df, effort, seed) {
       # Calculate beta within this site
       beta_out <- calc_comm_div(
         comm,
-        index = c("S", "S_n", "S_PIE", "S_C"),
+        index = c("S", "S_PIE", "S_C"),
         extrapolate = TRUE,
-        effort = 25,
         scales = "beta",
         C_target_gamma = 0.75
       )
@@ -106,9 +105,24 @@ wet_div_error <- betas_within_site %>%
 
 # Plotting the results
 ggplot() +
-  geom_jitter(data = betas_within_site, aes(x = index, y = value), alpha = 0.25, width = 0.2) +
-  geom_point(data = wet_div_error, aes(x = index, y = mean), color = "darkred", size = 3, alpha = 1) +
-  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "darkred", linewidth = 1) +
+  geom_jitter(
+    data = betas_within_site,
+    aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = value),
+    alpha = 0.25, width = 0.2
+  ) +
+  geom_point(
+    data = wet_div_error,
+    aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = mean),
+    color = "darkred", size = 3, alpha = 1
+  ) +
+  geom_errorbar(
+    data = wet_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      ymin = lower, ymax = upper
+    ),
+    color = "darkred", linewidth = 1, width = 0.2
+  ) +
   geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   theme_bw() +
   theme(legend.position = "none") +
@@ -116,9 +130,9 @@ ggplot() +
   xlab("Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S" = "βS",
-    "beta_S_n" = "βSn",
-    "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC"))
+    "beta_S_PIE" = "βSPIE",
+    "beta_S_C" = "βC"
+  ))
 
 
 # Plotting as geom_col

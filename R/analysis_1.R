@@ -187,9 +187,8 @@ calc_beta_by_year_boot <- function(df, effort = 5, n_boot = 99, seed = NULL) {
         # Beta diversity
         beta_out <- calc_comm_div(
           comm,
-          index = c("S", "S_n", "S_PIE", "S_C"),
+          index = c("S", "S_PIE", "S_C"),
           extrapolate = TRUE,
-          effort = 25,
           scales = "beta",
           C_target_gamma = 0.75
         )
@@ -209,7 +208,7 @@ calc_beta_by_year_boot <- function(df, effort = 5, n_boot = 99, seed = NULL) {
     })
 }
 
-betas_boot <- calc_beta_by_year_boot(wet_all, effort = 5, n_boot = 25, seed = NULL)
+betas_boot <- calc_beta_by_year_boot(wet_all, effort = 5, n_boot = 99, seed = NULL)
 
 
 
@@ -225,9 +224,18 @@ wet_div_error <- betas_boot %>%
 
 # Plotting the results
 ggplot() +
-  geom_jitter(data = betas_boot, aes(x = index, y = value), alpha = 0.25, width = 0.2) +
-  geom_point(data = wet_div_error, aes(x = index, y = mean), color = "darkred", size = 3, alpha = 1) +
-  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "darkred", linewidth = 1) +
+  geom_jitter(data = betas_boot, aes(
+    x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+    y = value
+  ), alpha = 0.25, width = 0.2) +
+  geom_point(data = wet_div_error, aes(
+    x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+    y = mean
+  ), color = "darkred", size = 3, alpha = 1) +
+  geom_errorbar(data = wet_div_error, aes(
+    x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+    ymin = lower, ymax = upper
+  ), color = "darkred", linewidth = 1, width = 0.2) +
   geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   theme_bw() +
   theme(legend.position = "none") +
@@ -235,9 +243,10 @@ ggplot() +
   xlab("Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S" = "βS",
-    "beta_S_n" = "βSn",
-    "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC"))
+    "beta_S_PIE" = "βSPIE",
+    "beta_S_C" = "βC"
+  ))
+
 
 
 

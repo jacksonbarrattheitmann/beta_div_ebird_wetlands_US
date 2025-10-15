@@ -10,6 +10,7 @@ library(lme4)
 library(performance)
 library(tibble)
 library(scales)
+library(patchwork)
 
 ######### OBJECTIVE 1 - CONTINENTAL SCALE ########
 ######### ALL GIWs rarefaction ##############
@@ -140,8 +141,9 @@ rf_ssbr_kncn <- rarefaction(mob_wet, method = "sSBR", spat_algo = "kNCN")
 # Random individual based rarefaction (IBR)
 rf_ibr <- rarefaction(mob_wet, method = "IBR")
 
+n_ibr <- 0:(length(rf_ibr)-1)
 
-
+df_ibr <- tibble(n = n_ibr / comm_sum, S = rf_ibr)
 
 # Turn into data frames
 df_sbr <- tibble(n = seq_along(rf_sbr), S = rf_sbr, method = "SBR")
@@ -150,31 +152,36 @@ df_ssbr_kncn <- tibble(n = seq_along(rf_ssbr_kncn), S = rf_ssbr_kncn, method = "
 df_ibr <- tibble(n = seq_along(rf_ibr), S = rf_ibr, method = "IBR")
 
 ## Dan's suggested plot
-compare_samp_rarefaction(mob_wet)
-lines(1:length(rf_ibr) / comm_sum, rf_ibr, col='purple')
+#compare_samp_rarefaction(mob_wet)
+#lines(1:length(rf_ibr) / comm_sum, rf_ibr, col='purple')
 
 
 # Combine
-df_all <- bind_rows(df_sbr, df_ssbr_knn, df_ssbr_kncn, df_ibr[1:comm_sum, ])
+df_all <- bind_rows(df_sbr, df_ssbr_knn, df_ssbr_kncn)
 
 # Plot
 ggplot(df_all, aes(x = n, y = S, color = method)) +
   geom_line(size = 1.1) +
-  theme_minimal() +
-  labs(
-    x = "Number of samples",
-    y = "Rarefied species richness",
-    color = "Method",
-    title = "Comparison: SBR, sSBR (kNN & kNCN), IBR"
-  ) +
+  geom_line(data = df_ibr, aes(x = n, y = S, color = "IBR"), size = 1.1) +
   scale_color_manual(values = c(
-    SBR = "black",
-    sSBR_kNN = "blue",
-    sSBR_kNCN = "red"
+    "SBR" = "black",
+    "sSBR_kNN" = "red",
+    "sSBR_kNCN" = "blue",
+    "IBR" = "purple"
   )) +
+  labs(
+    x = "Sampling effort",
+    y = "Species richness"
+  ) +
+  theme_minimal(base_size = 10) +
   theme(legend.position = "bottom")
 
 
+
+
+
+
+#### OBJECTIVE 2 - ECOREGION ########
 ### now let's do this WITHIN ecoregion
 ## First let's filter down to our ecoregions that acutally worked for our analysis
 
@@ -343,18 +350,19 @@ plot_rarefaction_ecoregions <- function(comm_df, env_df, coord_names = c("LONGIT
     # Plot
     ggplot(df_all, aes(x = n, y = S, color = method)) +
       geom_line(size = 1.1) +
-      geom_line(data = df_ibr, aes(x = n, y = S), color = "purple", size = 1.1) +
+      geom_line(data = df_ibr, aes(x = n, y = S, color = "IBR"), size = 1.1) +
       scale_color_manual(values = c(
         "SBR" = "black",
         "sSBR_kNN" = "red",
-        "sSBR_kNCN" = "blue"
+        "sSBR_kNCN" = "blue",
+        "IBR" = "purple"
       )) +
       labs(
         title = eco_name,
-        x = "Sampling effort (relative to mean N)",
+        x = "Sampling effort",
         y = "Species richness"
       ) +
-      theme_minimal(base_size = 13) +
+      theme_minimal(base_size = 10) +
       theme(legend.position = "bottom")
   })
   
@@ -363,4 +371,8 @@ plot_rarefaction_ecoregions <- function(comm_df, env_df, coord_names = c("LONGIT
 
 
 
-plot_rarefaction_ecoregions(comm_df_uni_eco, env_df_eco, coord_names = c("LONGITUDE", "LATITUDE"))
+plots <- plot_rarefaction_ecoregions(comm_df_uni_eco, env_df_eco, coord_names = c("LONGITUDE", "LATITUDE"))
+
+(wrap_plots(plots[c(1:3, 5, 7)]) +
+  plot_layout(guides = "collect")) &
+  theme(legend.position = "bottom")
