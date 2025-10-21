@@ -10,11 +10,28 @@ library(lme4)
 library(performance)
 library(tibble)
 library(scales)
+library(DHARMa)
+library(see)
+library(glmmTMB)
 
 # DATA
-wet_all <- readRDS("Intermediate_data/all_wet_check_dominants_removed.RDS")
+wet_all_summer <- readRDS("Intermediate_data/all_wet_check_dominants_removed_summer.RDS")
+
+wet_all_fall <- readRDS("Intermediate_data/all_wet_check_dominants_removed_fall.RDS")
+
+wet_all_spring <- readRDS("Intermediate_data/all_wet_check_dominants_removed_spring.RDS")
+
+wet_all_winter <- readRDS("Intermediate_data/all_wet_check_dominants_removed_winter.RDS")
+
+env_summer <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
+
+# need spatial coords for the LOCALITY_IDs
+wet_coords <- readRDS("Intermediate_data/locality_ids_long_lat.RDS")
 
 env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
+
+env <- env %>%
+  left_join(wet_coords, by = "LOCALITY_ID")
 
 ## Creating a dataframe with just the LOCALITY_ID and ECOREGION
 ## to append to the wet_all df
@@ -22,8 +39,17 @@ env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
 ecoregion_loc <- env %>%
   select(LOCALITY_ID, NA_L1NAME)
 
-wet_all <- wet_all %>%
+wet_all_summer <- wet_all_summer %>%
   inner_join(ecoregion_loc, by = "LOCALITY_ID")
+
+wet_all_fall <- wet_all_fall %>%
+  inner_join(ecoregion_loc, by = "LOCALITY_ID")
+
+wet_all_spring <- wet_all_spring %>%
+  inner_join(ecoregion_loc, by = "LOCALITY_ID")
+
+wet_all_winter <- wet_all_winter %>%
+  inner_join(ecoregion_loc, by = "LOCALITY_ID") 
 
 ######### OBJECTIVE 3 - GIW scale ############
 ######### Within GIW beta diversity analysis ##########
@@ -86,16 +112,49 @@ calc_beta_within_site <- function(df, effort, seed) {
     })
 }
 
+# SUMMER
+betas_within_site_summer <- calc_beta_within_site(wet_all_summer, effort = 5, seed = 5)
 
-betas_within_site <- calc_beta_within_site(wet_all, effort = 5, seed = 5)
+betas_within_site_summer <- betas_within_site_summer %>%
+  mutate(SEASON = "Summer")
 
-betas_within_site <- betas_within_site %>%
+betas_within_site_summer <- betas_within_site_summer %>%
   filter(!is.infinite(value))
-  
+
+# FALL
+betas_within_site_fall <- calc_beta_within_site(wet_all_fall, effort = 5, seed = 5)
+
+betas_within_site_fall <- betas_within_site_fall %>%
+  mutate(SEASON = "Fall")
+
+betas_within_site_fall <- betas_within_site_fall %>%
+  filter(!is.infinite(value))
+
+# SPRING
+betas_within_site_spring <- calc_beta_within_site(wet_all_spring, effort = 5, seed = 5)
+
+betas_within_site_spring <- betas_within_site_spring %>%
+  mutate(SEASON = "Spring")
+
+betas_within_site_spring <- betas_within_site_spring %>%
+  filter(!is.infinite(value))
+
+# WINTER
+betas_within_site_winter <- calc_beta_within_site(wet_all_winter, effort = 5, seed = 5)
+
+betas_within_site_winter <- betas_within_site_winter %>%
+  mutate(SEASON = "Winter")
+
+betas_within_site_winter <- betas_within_site_winter %>%
+  filter(!is.infinite(value))
+
+betas_within_site <- rbind(betas_within_site_winter, betas_within_site_spring, betas_within_site_summer, betas_within_site_fall)
+
+# saveRDS(betas_within_site, "Intermediate_data/beta_results_ecoregion_dom_removed.RDS")
 
 # calculating the means and error bars for plotting
 wet_div_error <- betas_within_site %>%
-  group_by(index) %>%
+  group_by(index, SEASON) %>%
   summarize(
     mean = mean(value, na.rm = TRUE),
     lower = quantile(value, 0.025, na.rm = TRUE),
@@ -107,55 +166,50 @@ wet_div_error <- betas_within_site %>%
 ggplot() +
   geom_jitter(
     data = betas_within_site,
-    aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = value),
-    alpha = 0.25, width = 0.2
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = value,
+      color = SEASON
+    ),
+    alpha = 0.05,
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.5)
   ) +
   geom_point(
     data = wet_div_error,
-    aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = mean),
-    color = "darkred", size = 3, alpha = 1
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = mean,
+      color = SEASON
+    ),
+    size = 3,
+    shape = 21,
+    fill = "white",
+    stroke = 1.2,
+    position = position_dodge(width = 0.5)
   ) +
   geom_errorbar(
     data = wet_div_error,
     aes(
       x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
-      ymin = lower, ymax = upper
+      ymin = lower,
+      ymax = upper,
+      color = SEASON
     ),
-    color = "darkred", linewidth = 1, width = 0.2
+    linewidth = 1.2,
+    width = 0.2,
+    position = position_dodge(width = 0.5)
   ) +
   geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   theme_bw() +
-  theme(legend.position = "none") +
   ylab("Value") +
   xlab("Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S" = "βS",
     "beta_S_PIE" = "βSPIE",
     "beta_S_C" = "βC"
-  ))
-
-
-# Plotting as geom_col
-ggplot(wet_div_error, aes(x = index, y = mean)) +
-  geom_col(fill = "skyblue") +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.3, color = "red") +
-  geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
-  theme_bw() +
-  ylab("Value") +
-  xlab("Beta Diversity Index") +
-  scale_x_discrete(labels = c(
-    "beta_S" = "βS",
-    "beta_S_n" = "βSn",
-    "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC")) +
-  theme(legend.position = "none",
-        axis.title.x = element_text(
-          margin = margin(t = 15)),
-        axis.title.y = element_text(
-          margin = margin(r = 15)))
-
-ggsave("FigX_betas_WETLAND_scale.png", width = 6, height = 4,
-       bg = "transparent")
+  )) +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "right")
 
 # need to add the GIW area per state as an explanatory variable
 
@@ -166,47 +220,48 @@ data_mod <- env %>%
   distinct(LOCALITY_ID, .keep_all = TRUE) %>%
   full_join(betas_within_site, by = "LOCALITY_ID")
 
+data_mod_clean <- data_mod %>%
+  filter(!is.na(value))
+
+data_mod_clean$value <-  as.numeric(data_mod_clean$value)
+data_mod_clean$YEAR <- as.factor(data_mod_clean$YEAR)
+
+ggplot(data_mod_clean, aes(x = value)) +
+  geom_histogram(binwidth = 0.05, fill = "steelblue", color = "white") +
+  facet_wrap(~ index, scales = "free_y") +
+  theme_minimal() +
+  labs(x = "Beta diversity value", y = "Frequency")
+
 
 for (idx in unique(data_mod$index)) {
   cat("\n===== Index:", idx, "=====\n")
   
-  df <- data_mod %>% filter(index == idx)
+  df <- data_mod_clean %>% filter(index == idx)
   
-  mod <- glm(value ~ rescale(built_wet) + rescale(water_wet) + rescale(log10(area_sqkm)) + 
-               rescale(shan_wet) + rescale(evi_mean) + rescale(water_25km) + rescale(built_25km) +
-               rescale(shan_gamma_25), family = poisson, data = df)
+  mod <- glmmTMB(
+    value ~ rescale(built_wet) +
+      rescale(water_wet) +
+      rescale(log10(area_sqkm)) +
+      rescale(shan_wet) +
+      rescale(evi_mean) +
+      rescale(water_25km) +
+      rescale(built_25km) +
+      rescale(shan_gamma_25) +
+      (1 | YEAR) + # random intercept for YEAR
+      (1 | LOCALITY_ID), # random intercept for GIW site ID, since we coudl have the same site on different years     
+    family = Gamma(link = "log"),
+    data = df
+  )
   print(summary(mod))
   print(check_model(mod))
   
 }
 
-hist(betas_within_site$value)
-# wetland area
-data_mod %>%
-  filter(index == "beta_S") %>%
-  ggplot() +
-  geom_point(aes(x = log(area_sqkm*1000), y = value)) +
-  geom_smooth(aes(x = log(area_sqkm*1000), y = value), method = "lm") +
+
+data_mod_clean %>%
+  filter(index == "beta_S_C") %>%
+  ggplot(aes(x = value, y = evi_mean)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
   theme_bw()
 
-# EVI
-data_mod %>%
-  filter(index == "beta_S") %>%
-  ggplot() +
-  geom_point(aes(x = evi_mean, y = value)) +
-  geom_smooth(aes(x = evi_mean, y = value), method = "lm") +
-  theme_bw()
-
-# habitat heterogeneity
-ggplot(data = df) +
-  geom_point(aes(x = shan_wet, y = value)) +
-  geom_smooth(aes(x = shan_wet, y = value), method = "lm") +
-  theme_bw()
-
-# Water 25km
-data_mod %>%
-  filter(index == "beta_S") %>%
-  ggplot() +
-  geom_point(aes(x = water_25km, y = value)) +
-  geom_smooth(aes(x = water_25km, y = value), method = "lm") +
-  theme_bw()

@@ -11,7 +11,13 @@ library(multcompView)
 library(broom)
 
 ####### OBJECTIVE 2 - ECOREGION scale ##########
-wet_eco <- readRDS("Intermediate_data/all_wet_check_for_analysis.RDS")
+wet_eco_summer <- readRDS("Intermediate_data/all_wet_check_for_analysis_SUMMER.RDS")
+
+wet_eco_fall <- readRDS("Intermediate_data/all_wet_check_for_analysis_FALL.RDS")
+
+wet_eco_spring <- readRDS("Intermediate_data/all_wet_check_for_analysis_SPRING.RDS")
+
+wet_eco_winter <- readRDS("Intermediate_data/all_wet_check_for_analysis_WINTER.RDS")
 
 # the ENV data with ECOREGION = NA_L1NAME column
 env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
@@ -24,12 +30,23 @@ env_eco <- env %>%
   inner_join(wet_coords, by = "LOCALITY_ID")
 
 
+wet_eco_summer <- wet_eco_summer %>%
+  inner_join(env_eco, by = "LOCALITY_ID")
+
+wet_eco_fall <- wet_eco_fall %>%
+  inner_join(env_eco, by = "LOCALITY_ID")
+
+wet_eco_spring <- wet_eco_spring %>%
+  inner_join(env_eco, by = "LOCALITY_ID")
+
+wet_eco_winter <- wet_eco_winter %>%
+  inner_join(env_eco, by = "LOCALITY_ID") 
+
 ############# FUNCTION ##################
 
 calculate_beta_ecoregion_sf <- function(wet_long,
                                         env_eco,
                                         n_reps = 999,
-                                        effort = 25,
                                         C_target_gamma = 0.75,
                                         max_anchor_attempts = 1000) {
   
@@ -172,9 +189,8 @@ calculate_beta_ecoregion_sf <- function(wet_long,
       comm_div <- tryCatch({
         calc_comm_div(
           comm_mat,
-          index = c("S", "S_n", "S_PIE", "S_C"),
+          index = c("S", "S_PIE", "S_C"),
           extrapolate = TRUE,
-          effort = effort,
           scales = c("beta"),
           C_target_gamma = C_target_gamma
         )
@@ -203,38 +219,169 @@ calculate_beta_ecoregion_sf <- function(wet_long,
 }
 
 
+# SUMMER
+beta_results_summer <- calculate_beta_ecoregion_sf(wet_eco_summer, env_eco, n_reps = 99, max_anchor_attempts = 99)
 
-beta_results <- calculate_beta_ecoregion_sf(wet_eco, env_eco, n_reps = 99, max_anchor_attempts = 99)
+beta_results_summer <- beta_results_summer %>%
+  mutate(SEASON = "Summer")
 
-saveRDS(beta_results, "Intermediate_data/beta_results_eco.RDS")
+# FALL
+beta_results_fall <- calculate_beta_ecoregion_sf(wet_eco_fall, env_eco, n_reps = 99, max_anchor_attempts = 99)
 
-beta_results <- readRDS("Intermediate_data/beta_results_eco.RDS")
+beta_results_fall <- beta_results_fall %>%
+  mutate(SEASON = "Fall")
+
+# SPRING
+beta_results_spring <- calculate_beta_ecoregion_sf(wet_eco_spring, env_eco, n_reps = 99, max_anchor_attempts = 99)
+
+beta_results_spring <- beta_results_spring %>%
+  mutate(SEASON = "Spring")
+
+# WInter
+beta_results_winter <- calculate_beta_ecoregion_sf(wet_eco_winter, env_eco, n_reps = 99, max_anchor_attempts = 99)
+
+beta_results_winter <- beta_results_winter %>%
+  mutate(SEASON = "Winter")
+
+# Combine
+
+beta_results_eco <- rbind(beta_results_winter, beta_results_spring, beta_results_summer, beta_results_fall)
+
+#saveRDS(beta_results_eco, "Intermediate_data/beta_results_eco.RDS")
+
+beta_results <- readRDS("Intermediate_data/beta_results_eco.RDS") %>%
+  filter(SEASON == "Summer")
 
 # error bars confidence intervals 95%
 beta_div_error <- beta_results %>%
-  group_by(index, NA_L1NAME) %>%
+  group_by(index, NA_L1NAME, SEASON) %>%
   summarize(
     mean = mean(value, na.rm = TRUE),
     lower = quantile(value, 0.025, na.rm = TRUE),
     upper = quantile(value, 0.975, na.rm = TRUE)
   )
 
+
 ggplot() +
-  geom_jitter(data = beta_results, aes(x = index, y = value, color = NA_L1NAME)) +
-  geom_point(data = beta_div_error, aes(x = index, y = mean), color = "black")+
-  geom_errorbar(data = beta_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "black", alpha = 0.75, linewidth = 1) +
-  geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
+  geom_jitter(
+    data = beta_results,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = value,
+      color = NA_L1NAME
+    ),
+    alpha = 0.1,
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.5)
+  ) +
+  geom_point(
+    data = beta_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = mean,
+      color = NA_L1NAME
+    ),
+    size = 3,
+    shape = 21,
+    fill = "white",
+    stroke = 1.2,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_errorbar(
+    data = beta_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      ymin = lower,
+      ymax = upper,
+      color = NA_L1NAME
+    ),
+    linewidth = 1.2,
+    width = 0.2,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   facet_wrap(~NA_L1NAME) +
   theme_bw() +
-  theme(legend.position = "none")  +
   ylab("Value") +
-  xlab("Beta Diversity Index") +
+  xlab("Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S" = "βS",
-    "beta_S_n" = "βSn",
-    "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC"))
+    "beta_S_PIE" = "βSPIE",
+    "beta_S_C" = "βC"
+  )) +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "none")
 
+
+
+
+
+
+
+beta_results <- readRDS("Intermediate_data/beta_results_eco.RDS")
+
+# remove MED CALI because we didn't have enough data in summer months
+
+beta_results <- beta_results %>%
+  filter(!NA_L1NAME == "MEDITERRANEAN CALIFORNIA")
+
+# error bars confidence intervals 95%
+beta_div_error <- beta_results %>%
+  group_by(index, NA_L1NAME, SEASON) %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    lower = quantile(value, 0.025, na.rm = TRUE),
+    upper = quantile(value, 0.975, na.rm = TRUE)
+  )
+
+
+ggplot() +
+  geom_jitter(
+    data = beta_results,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = value,
+      color = SEASON
+    ),
+    alpha = 0.1,
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.5)
+  ) +
+  geom_point(
+    data = beta_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = mean,
+      color = SEASON
+    ),
+    size = 3,
+    shape = 21,
+    fill = "white",
+    stroke = 1.2,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_errorbar(
+    data = beta_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      ymin = lower,
+      ymax = upper,
+      color = SEASON
+    ),
+    linewidth = 1.2,
+    width = 0.2,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
+  facet_wrap(~NA_L1NAME) +
+  theme_bw() +
+  ylab("Value") +
+  xlab("Diversity Index") +
+  scale_x_discrete(labels = c(
+    "beta_S" = "βS",
+    "beta_S_PIE" = "βSPIE",
+    "beta_S_C" = "βC"
+  )) +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "right")
 
 
 

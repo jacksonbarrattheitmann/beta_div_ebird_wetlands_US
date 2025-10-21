@@ -12,11 +12,23 @@ library(tibble)
 library(scales)
 
 ######### OBJECTIVE 1 - CONTINENTAL SCALE ########
-######### ALL GIWs beta ##############
+######### ALL GIWs beta per season ##############
 
-wet_all <- readRDS("Intermediate_data/all_wet_check_dominants_removed.RDS")
+wet_all_summer <- readRDS("Intermediate_data/all_wet_check_dominants_removed_summer.RDS")
+
+wet_all_fall <- readRDS("Intermediate_data/all_wet_check_dominants_removed_fall.RDS")
+
+wet_all_spring <- readRDS("Intermediate_data/all_wet_check_dominants_removed_spring.RDS")
+
+wet_all_winter <- readRDS("Intermediate_data/all_wet_check_dominants_removed_winter.RDS")
+
+# need spatial coords for the LOCALITY_IDs
+wet_coords <- readRDS("Intermediate_data/locality_ids_long_lat.RDS")
 
 env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
+
+env <- env %>%
+  left_join(wet_coords, by = "LOCALITY_ID")
 
 ## Creating a dataframe with just the LOCALITY_ID and ECOREGION
 ## to append to the wet_all df
@@ -24,8 +36,17 @@ env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
 ecoregion_loc <- env %>%
   select(LOCALITY_ID, NA_L1NAME)
 
-wet_all <- wet_all %>%
+wet_all_summer <- wet_all_summer %>%
   inner_join(ecoregion_loc, by = "LOCALITY_ID")
+
+wet_all_fall <- wet_all_fall %>%
+  inner_join(ecoregion_loc, by = "LOCALITY_ID")
+
+wet_all_spring <- wet_all_spring %>%
+  inner_join(ecoregion_loc, by = "LOCALITY_ID")
+
+wet_all_winter <- wet_all_winter %>%
+  inner_join(ecoregion_loc, by = "LOCALITY_ID") 
 
 
 ##### FUNCTION for calculating beta 
@@ -74,6 +95,7 @@ calc_beta_by_year <- function(df, effort = 5, seed = NULL) {
         comm,
         index = c("S", "S_PIE", "S_C"),
         extrapolate = TRUE,
+        effort = 25,
         scales = "beta",
         C_target_gamma = 0.75
       )
@@ -92,31 +114,52 @@ calc_beta_by_year <- function(df, effort = 5, seed = NULL) {
 }
 
 
-betas_ALL <- calc_beta_by_year(wet_all, effort = 5, seed = 5)
+betas_ALL_summer <- calc_beta_by_year(wet_all_summer, effort = 5, seed = 5)
+
+betas_ALL_summer <-  betas_ALL_summer %>%
+  mutate(SEASON = "Summer")
+
+betas_ALL_winter <- calc_beta_by_year(wet_all_winter, effort = 5, seed = 5)
+
+betas_ALL_winter <-  betas_ALL_winter %>%
+  mutate(SEASON = "Winter")
+
+betas_ALL_spring <- calc_beta_by_year(wet_all_spring, effort = 5, seed = 5)
+
+betas_ALL_spring <- betas_ALL_spring %>%
+  mutate(SEASON = "Spring")
+
+betas_ALL_fall <- calc_beta_by_year(wet_all_fall, effort = 5, seed = 5)
+
+betas_ALL_fall <- betas_ALL_fall %>%
+  mutate(SEASON = "Fall")
+
+betas_ALL <- rbind(betas_ALL_winter, betas_ALL_spring, betas_ALL_summer, betas_ALL_fall)
 
 ########## PLOTS for OBJECTIVE 1 ##################
 
 
 ggplot(data = betas_ALL) +
-  geom_point(aes(x = index, y = value)) + theme_bw() +
-  geom_hline(yintercept = 1, color = "darkred", linetype = "dashed", linewidth = 1) +
+  geom_point(aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = value, color = SEASON)) + theme_bw() +
+  geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   xlab("Beta Diversity Index") +
   ylab("Value") +
+  facet_wrap(~SEASON) +
   scale_x_discrete(  labels = c(
     "beta_S" = "βS",
-    "beta_S_n" = "βSn",
     "beta_S_PIE" = "βSPIE", 
     "beta_S_C" = "βC"
   )) +
-  theme(legend.position = "none",
+  theme(legend.position = "right",
         axis.title.x = element_text(
           margin = margin(t = 15)),
         axis.title.y = element_text(
-          margin = margin(r = 15)))
+          margin = margin(r = 15))) +
+  scale_color_brewer(palette = "Set1")
 
 
-#ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
-#       bg = "transparent")
+ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
+       bg = "transparent")
 
 
 ### Let's do one more sensitivity analysis
@@ -180,9 +223,8 @@ calc_beta_by_year_boot <- function(df, effort = 5, n_boot = 99, seed = NULL) {
         # Beta diversity
         beta_out <- calc_comm_div(
           comm,
-          index = c("S", "S_n", "S_PIE", "S_C"),
+          index = c("S", "S_PIE", "S_C"),
           extrapolate = TRUE,
-          effort = 25,
           scales = "beta",
           C_target_gamma = 0.75
         )
@@ -202,33 +244,92 @@ calc_beta_by_year_boot <- function(df, effort = 5, n_boot = 99, seed = NULL) {
     })
 }
 
-betas_boot <- calc_beta_by_year_boot(wet_all, effort = 5, n_boot = 25, seed = NULL)
+betas_boot_summer <- calc_beta_by_year_boot(wet_all_summer, effort = 5, n_boot = 99, seed = NULL)
+
+betas_boot_summer <- betas_boot_summer %>%
+  mutate(SEASON = "Summer")
+
+betas_boot_fall <- calc_beta_by_year_boot(wet_all_fall, effort = 5, n_boot = 99, seed = NULL)
+
+betas_boot_fall <- betas_boot_fall %>%
+  mutate(SEASON = "Fall")
+
+betas_boot_spring <- calc_beta_by_year_boot(wet_all_spring, effort = 5, n_boot = 99, seed = NULL)
+
+betas_boot_spring <- betas_boot_spring %>%
+  mutate(SEASON = "Spring")
+
+betas_boot_winter <- calc_beta_by_year_boot(wet_all_winter, effort = 5, n_boot = 99, seed = NULL)
+
+betas_boot_winter <- betas_boot_winter %>%
+  mutate(SEASON = "Winter")
+
+## Let's rbind all of these dfs toghther for plotting
+
+betas_boot <- rbind(betas_boot_winter, betas_boot_spring, betas_boot_summer, betas_boot_fall)
+
+saveRDS(betas_boot, "Intermediate_data/beta_results_continental_doms_removed.RDS")
 
 # calculating the means and error bars for plotting
 wet_div_error <- betas_boot %>%
-  group_by(index) %>%
+  group_by(index, SEASON) %>%
   summarize(
     mean = mean(value, na.rm = TRUE),
     lower = quantile(value, 0.025, na.rm = TRUE),
     upper = quantile(value, 0.975, na.rm = TRUE)
   )
 
-
 # Plotting the results
 ggplot() +
-  geom_jitter(data = betas_boot, aes(x = index, y = value), alpha = 0.25, width = 0.2) +
-  geom_point(data = wet_div_error, aes(x = index, y = mean), color = "darkred", size = 3, alpha = 1) +
-  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "darkred", linewidth = 1) +
+  geom_jitter(
+    data = betas_boot,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = value,
+      color = SEASON
+    ),
+    alpha = 0.1,
+    position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.5)
+  ) +
+  geom_point(
+    data = wet_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = mean,
+      color = SEASON
+    ),
+    size = 3,
+    shape = 21,
+    fill = "white",
+    stroke = 1.2,
+    position = position_dodge(width = 0.5)
+  ) +
+  geom_errorbar(
+    data = wet_div_error,
+    aes(
+      x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      ymin = lower,
+      ymax = upper,
+      color = SEASON
+    ),
+    linewidth = 1.2,
+    width = 0.2,
+    position = position_dodge(width = 0.5)
+  ) +
   geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   theme_bw() +
-  theme(legend.position = "none") +
   ylab("Value") +
   xlab("Diversity Index") +
   scale_x_discrete(labels = c(
     "beta_S" = "βS",
-    "beta_S_n" = "βSn",
-    "beta_S_PIE" = "βSPIE", 
-    "beta_S_C" = "βC"))
+    "beta_S_PIE" = "βSPIE",
+    "beta_S_C" = "βC"
+  )) +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "right")
+
+
+
 
 
 
@@ -271,93 +372,8 @@ ggplot(data = betas_ALL) +
   ylab("Number of GIWs used to calculate β")
 
 
-#### SENSITIVITY TEST for Sn ######
-
-calc_beta_by_year_sn <- function(df, effort = 5, seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)  # reproducibility if seed supplied
-  
-  df %>%
-    group_by(YEAR) %>%
-    group_split() %>%
-    map_dfr(function(year_dat) {
-      year_val <- year_dat$YEAR[1]
-      
-      # Sites with at least `effort` unique checklists
-      sites_ok <- year_dat %>%
-        distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER) %>%
-        count(LOCALITY_ID, name = "n_checklists") %>%
-        filter(n_checklists >= effort) %>%
-        pull(LOCALITY_ID)
-      
-      if (length(sites_ok) < 2) return(NULL)  # need ≥2 sites
-      
-      # Sample effort checklists per site
-      chosen_chk <- year_dat %>%
-        filter(LOCALITY_ID %in% sites_ok) %>%
-        distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER) %>%
-        group_by(LOCALITY_ID) %>%
-        slice_sample(n = effort) %>%
-        ungroup()
-      
-      sampled <- year_dat %>%
-        semi_join(chosen_chk, by = c("LOCALITY_ID", "SAMPLING_EVENT_IDENTIFIER"))
-      
-      # Collapse 5 checklists into a single row per site
-      comm <- sampled %>%
-        group_by(LOCALITY_ID, COMMON_NAME) %>%
-        summarise(abundance = sum(OBSERVATION_COUNT, na.rm = TRUE), .groups = "drop") %>%
-        pivot_wider(names_from = COMMON_NAME, values_from = abundance, values_fill = 0) %>%
-        as.data.frame()
-      
-      rownames(comm) <- comm$LOCALITY_ID
-      comm$LOCALITY_ID <- NULL  # now rows = sites, cols = species
-      
-      # Beta diversity
-      beta_out <- calc_comm_div(
-        comm,
-        index = c("S_n"),
-        extrapolate = TRUE,
-        effort = c(10, 25, 50),
-        scales = "beta",
-        C_target_gamma = 0.75
-      )
-      
-      tibble(
-        YEAR = year_val,
-        n_sites = length(sites_ok),
-        scale = beta_out$scale,
-        index = beta_out$index,
-        sample_size = beta_out$sample_size,
-        effort = beta_out$effort,
-        gamma_coverage = beta_out$gamma_coverage,
-        value = beta_out$value
-      )
-    })
-}
 
 
-betas_sn_testing <- calc_beta_by_year_sn(wet_all, seed = 5)
-
-# calculating the means and error bars for plotting
-wet_div_error <- betas_sn_testing %>%
-  group_by(index, effort) %>%
-  summarize(
-    mean = mean(value, na.rm = TRUE),
-    lower = quantile(value, 0.025, na.rm = TRUE),
-    upper = quantile(value, 0.975, na.rm = TRUE)
-  )
 
 
-# Plotting the results
-ggplot() +
-  geom_jitter(data = betas_sn_testing, aes(x = index, y = value), alpha = 0.25, width = 0.2) +
-  geom_point(data = wet_div_error, aes(x = index, y = mean), color = "darkred", size = 3, alpha = 1) +
-  geom_errorbar(data = wet_div_error, aes(x = index, ymin = lower, ymax = upper, width = 0.2), color = "darkred", linewidth = 1) +
-  geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
-  facet_wrap(~effort) +
-  theme_bw() +
-  theme(legend.position = "none") +
-  ylab("Value") +
-  xlab("Diversity Index") +
-  scale_x_discrete(labels = c(
-    "beta_S_n" = "βSn"))
+######## RAREFACTION ###############

@@ -141,7 +141,7 @@ rf_ssbr_kncn <- rarefaction(mob_wet, method = "sSBR", spat_algo = "kNCN")
 # Random individual based rarefaction (IBR)
 rf_ibr <- rarefaction(mob_wet, method = "IBR")
 
-n_ibr <- 0:(length(rf_ibr)-1)
+n_ibr <- 1:(length(rf_ibr)-1)
 
 df_ibr <- tibble(n = n_ibr / comm_sum, S = rf_ibr)
 
@@ -149,7 +149,6 @@ df_ibr <- tibble(n = n_ibr / comm_sum, S = rf_ibr)
 df_sbr <- tibble(n = seq_along(rf_sbr), S = rf_sbr, method = "SBR")
 df_ssbr_knn  <- tibble(n = seq_along(rf_ssbr_knn), S = rf_ssbr_knn, method = "sSBR_kNN")
 df_ssbr_kncn <- tibble(n = seq_along(rf_ssbr_kncn), S = rf_ssbr_kncn, method = "sSBR_kNCN")
-df_ibr <- tibble(n = seq_along(rf_ibr), S = rf_ibr, method = "IBR")
 
 ## Dan's suggested plot
 #compare_samp_rarefaction(mob_wet)

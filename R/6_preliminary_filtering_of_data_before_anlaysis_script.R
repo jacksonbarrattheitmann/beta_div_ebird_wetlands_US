@@ -73,6 +73,7 @@ wet_dat <- wet_dat %>%
     )
   )
 
+######## SUMMER ###########
 ## Now let's see if we can't create a filter to have at least 5 checklists
 ## in only the summer months, in any given year
 
@@ -103,72 +104,225 @@ wet_dat_analysis_2 <- wet_dat_analysis %>%
   filter(SAMPLING_EVENT_IDENTIFIER %in% wet_dat_poss$SAMPLING_EVENT_IDENTIFIER)
 
 ## SAVING THE FILE
-#saveRDS(wet_dat_analysis, "Intermediate_data/all_wet_check_for_analysis.RDS")
+saveRDS(wet_dat_analysis, "Intermediate_data/all_wet_check_for_analysis_SUMMER.RDS")
 
+
+
+###### WINTER #######
+
+wet_dat_analysis <- wet_dat %>%
+  filter(SEASON == "WINTER") %>%
+  group_by(LOCALITY_ID, YEAR) %>%
+  mutate(num_check = length(unique(SAMPLING_EVENT_IDENTIFIER)))
+
+## here's the 5 checklist filter
+wet_dat_analysis <- wet_dat_analysis %>%
+  filter(num_check >= 5)
+
+
+## Now let's look at how many LOCALITY_IDs we'll have
+length(unique(wet_dat_analysis$LOCALITY_ID))
+
+# 195 with at least 5 checklists during one summer season in at least 1 year
+# let's save this as an RDS for our analysis script
+
+## Let's make sure we have independence in the sampling units
+# by grabbing only a single checklist from a single LOCALITY_ID on a single DAY
+wet_dat_poss <- wet_dat_analysis %>%
+  distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER, OBSERVATION_DATE)
+
+# looks like this is not a problem so we can go ahead with our current 
+# dataset in wet_dat_anlaysis
+wet_dat_analysis_2 <- wet_dat_analysis %>%
+  filter(SAMPLING_EVENT_IDENTIFIER %in% wet_dat_poss$SAMPLING_EVENT_IDENTIFIER)
+
+## SAVING THE FILE
+#saveRDS(wet_dat_analysis, "Intermediate_data/all_wet_check_for_analysis_WINTER.RDS")
+
+
+###### SPRING #########
+wet_dat_analysis <- wet_dat %>%
+  filter(SEASON == "SPRING") %>%
+  group_by(LOCALITY_ID, YEAR) %>%
+  mutate(num_check = length(unique(SAMPLING_EVENT_IDENTIFIER)))
+
+## here's the 5 checklist filter
+wet_dat_analysis <- wet_dat_analysis %>%
+  filter(num_check >= 5)
+
+
+## Now let's look at how many LOCALITY_IDs we'll have
+length(unique(wet_dat_analysis$LOCALITY_ID))
+
+# 195 with at least 5 checklists during one summer season in at least 1 year
+# let's save this as an RDS for our analysis script
+
+## Let's make sure we have independence in the sampling units
+# by grabbing only a single checklist from a single LOCALITY_ID on a single DAY
+wet_dat_poss <- wet_dat_analysis %>%
+  distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER, OBSERVATION_DATE)
+
+# looks like this is not a problem so we can go ahead with our current 
+# dataset in wet_dat_anlaysis
+wet_dat_analysis_2 <- wet_dat_analysis %>%
+  filter(SAMPLING_EVENT_IDENTIFIER %in% wet_dat_poss$SAMPLING_EVENT_IDENTIFIER)
+
+## SAVING THE FILE
+#saveRDS(wet_dat_analysis, "Intermediate_data/all_wet_check_for_analysis_SPRING.RDS")
+
+
+###### FALL ######
+
+wet_dat_analysis <- wet_dat %>%
+  filter(SEASON == "FALL") %>%
+  group_by(LOCALITY_ID, YEAR) %>%
+  mutate(num_check = length(unique(SAMPLING_EVENT_IDENTIFIER)))
+
+## here's the 5 checklist filter
+wet_dat_analysis <- wet_dat_analysis %>%
+  filter(num_check >= 5)
+
+
+## Now let's look at how many LOCALITY_IDs we'll have
+length(unique(wet_dat_analysis$LOCALITY_ID))
+
+# 195 with at least 5 checklists during one summer season in at least 1 year
+# let's save this as an RDS for our analysis script
+
+## Let's make sure we have independence in the sampling units
+# by grabbing only a single checklist from a single LOCALITY_ID on a single DAY
+wet_dat_poss <- wet_dat_analysis %>%
+  distinct(LOCALITY_ID, SAMPLING_EVENT_IDENTIFIER, OBSERVATION_DATE)
+
+# looks like this is not a problem so we can go ahead with our current 
+# dataset in wet_dat_anlaysis
+wet_dat_analysis_2 <- wet_dat_analysis %>%
+  filter(SAMPLING_EVENT_IDENTIFIER %in% wet_dat_poss$SAMPLING_EVENT_IDENTIFIER)
+
+## SAVING THE FILE
+#saveRDS(wet_dat_analysis, "Intermediate_data/all_wet_check_for_analysis_FALL.RDS")
+
+
+## LOAD in the data files to remove hyperabundants, and make 
+## species plots by season
+
+wet_dat_sum <- readRDS("Intermediate_data/all_wet_check_for_analysis_SUMMER.RDS")
+wet_dat_win <- readRDS("Intermediate_data/all_wet_check_for_analysis_WINTER.RDS")
+wet_dat_fall <- readRDS("Intermediate_data/all_wet_check_for_analysis_FALL.RDS")
+wet_dat_spr <- readRDS("Intermediate_data/all_wet_check_for_analysis_SPRING.RDS")
+
+wet_dat_all <- rbind(wet_dat_spr, wet_dat_win, wet_dat_sum, wet_dat_fall)
+
+#total checklists
+length(unique(wet_dat_sum$SAMPLING_EVENT_IDENTIFIER))
+
+# total sites
+length(unique(wet_dat_sum$LOCALITY_ID))
+
+#total species
+length(unique(wet_dat_all$COMMON_NAME))
+
+#total birds counted
+sum(wet_dat_all$OBSERVATION_COUNT)
 
 #### Summary statistics
-spp_dat <- wet_dat_analysis %>%
-  group_by(COMMON_NAME) %>%
+spp_dat <- wet_dat_all %>%
+  group_by(COMMON_NAME, SEASON) %>%
   summarise(abundance = sum(OBSERVATION_COUNT, na.rm = TRUE))
 
-# plot for supplement
-ggplot(data = spp_dat) +
-  geom_histogram(aes(x = abundance), bins = 30, fill = "lightblue") +
-  xlab("Total Abundance") +
-  ylab("Count of species") +
-  scale_x_continuous(labels = label_comma()) +
-  theme_bw()
+# total sites by season
+spp_dat_season <- wet_dat_all %>%
+  group_by(SEASON) %>%
+  summarize(total_sites = n_distinct(LOCALITY_ID))
 
-## total species
-
-length(unique(spp_dat$COMMON_NAME))
-#  497
+median(spp_dat$abundance)
+min(spp_dat$abundance)
+max(spp_dat$abundance)
 
 
-## total abundance
+# checklists level data
 
-sum(spp_dat$abundance)
-# 4,053,763
-
-####
-# 162592
 
 # Percentage of sites with the species present
-spp_dat_2 <- wet_dat_analysis %>%
+spp_dat_2 <- wet_dat_all %>%
+  group_by(SEASON) %>%
   distinct(LOCALITY_ID, COMMON_NAME) %>%
   count(COMMON_NAME, name = "n_sites") %>%
-  mutate(total_sites = n_distinct(wet_dat_analysis$LOCALITY_ID),
-         prop_sites = n_sites / total_sites)
+  inner_join(spp_dat_season, by = "SEASON") %>%
+  mutate(prop_sites = n_sites / total_sites)
 
 ## Plot for supplement
 
 spp_dat <- spp_dat %>%
-  inner_join(spp_dat_2, by = "COMMON_NAME")
+  inner_join(spp_dat_2, by = c("SEASON", "COMMON_NAME"))
 
-ggplot(data = spp_dat, aes(x = prop_sites, y = abundance)) +
+ggplot(data = spp_dat, aes(x = prop_sites, y = abundance, color = SEASON)) +
   geom_point() +
   geom_text_repel(aes(label = COMMON_NAME)) +
   scale_y_continuous(labels = label_comma()) +
+  facet_wrap(~SEASON) +
   xlab("Proportion of sites with species present") +
   ylab("Total Abundance of species") +
-  theme_bw()
+  theme_bw() +
+  scale_color_brewer(palette = "Set1")
 
 
 
 ######### SUPPLEMENTRAY DATASET ############
-##### Let's also create a secondary dataset for analysis that excludes
+##### Let's also create a secondary data set for analysis that excludes
 ##### our 5 most abundant species, to see if rarity is better explained by
 ##### env variation
 
-spp_dat_filt <- spp_dat %>%
-  filter(abundance < 162592)
+# Let's find the 5 most abundant species
+# within each season, and remove those
+
+most_abun <- spp_dat %>%
+  group_by(SEASON) %>%
+  arrange(desc(abundance)) %>%
+  slice_head(n = 5)
 
 ### Now filter the wet_dat_analysis dataframe for only these species
 
-wet_dat_no_dom <- wet_dat_analysis %>%
-  filter(COMMON_NAME %in% spp_dat_filt$COMMON_NAME)
+most_abun_sum <- most_abun %>%
+  filter(SEASON == "SUMMER")
 
-#saveRDS(wet_dat_no_dom, "Intermediate_data/all_wet_check_dominants_removed.RDS")
+most_abun_win <- most_abun %>%
+  filter(SEASON == "WINTER")
+
+most_abun_spr <- most_abun %>%
+  filter(SEASON == "SPRING")
+
+most_abun_fall <- most_abun %>%
+  filter(SEASON == "FALL")
+
+## No we can filter each of the season dfs
+
+wet_dat_sum_dom_rem <- wet_dat_sum %>%
+  filter(!COMMON_NAME %in% most_abun_sum$COMMON_NAME)
+
+saveRDS(wet_dat_sum_dom_rem, "Intermediate_data/all_wet_check_dominants_removed_summer.RDS")
+
+wet_dat_win_dom_rem <- wet_dat_win %>%
+  filter(!COMMON_NAME %in% most_abun_win$COMMON_NAME)
+
+saveRDS(wet_dat_win_dom_rem, "Intermediate_data/all_wet_check_dominants_removed_winter.RDS")
+
+wet_dat_spr_dom_rem <- wet_dat_spr %>%
+  filter(!COMMON_NAME %in% most_abun_spr$COMMON_NAME)
+
+saveRDS(wet_dat_spr_dom_rem, "Intermediate_data/all_wet_check_dominants_removed_spring.RDS")
+
+wet_dat_fall_dom_rem <- wet_dat_fall %>%
+  filter(!COMMON_NAME %in% most_abun_fall$COMMON_NAME)
+
+saveRDS(wet_dat_fall_dom_rem, "Intermediate_data/all_wet_check_dominants_removed_fall.RDS")
+
+
+
+
+
+
+
 
 #### Supplementary Analysis with just one year, and only stationary checklists
 # let's deal with temporal bias + distance traveled
