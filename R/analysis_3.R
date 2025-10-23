@@ -393,25 +393,63 @@ ggplot() +
 ######### MODEL ##########
 ## the model
 
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(ggplot2)
+library(dplyr)
+library(glmmTMB)
+library(broom.mixed)   # tidy for mixed models
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(flextable)
+library(officer)
+library(knitr)
+library(kableExtra)
+
 for (idx in unique(beta_results$index)) {
   cat("\n===== Index:", idx, "=====\n")
   
   df <- beta_results %>% filter(index == idx)
   
-  # Fit ANOVA model
-  aov_model <- aov(value ~ NA_L1NAME, data = df)
-  print(summary(aov_model))
+  # Mixed model (YEAR as random intercept)
+  glmer_model <- glmmTMB(value ~ NA_L1NAME + SEASON + (1 | YEAR), 
+                         family = Gamma(link = "log"), 
+                         data = df)
+  print(check_model(glmer_model))
+  print(summary(glmer_model))
   
-  # Tukey HSD
-  tukey <- TukeyHSD(aov_model)
-  print(tukey)
+  # Tukey post-hoc for NA_L1NAME
+  emm <- emmeans(glmer_model, ~ NA_L1NAME)
   
-  # Tidy the Tukey output for ggplot
-  tukey_df <- as.data.frame(tukey$NA_L1NAME)
-  tukey_df$Comparison <- rownames(tukey_df)
-  rownames(tukey_df) <- NULL
+  tukey_pairs <- as.data.frame(pairs(emm, adjust = "tukey")) %>%
+    select(contrast, estimate, p.value)
   
-  # Plot with ggplot
+  tukey_ci <- as.data.frame(confint(pairs(emm, adjust = "tukey"))) %>%
+    rename(
+      lower.CL = asymp.LCL,
+      upper.CL = asymp.UCL
+    ) %>%
+    select(contrast, lower.CL, upper.CL)
+  
+  
+  
+  # Join p-values and CI into one clean table
+  tukey_df <- left_join(tukey_pairs, tukey_ci, by = "contrast") %>%
+    rename(
+      Comparison = contrast,
+      diff = estimate,
+      lwr = lower.CL,
+      upr = upper.CL,
+      p_value = p.value
+    )
+  
+  cat("\n--- Tukey post-hoc for NA_L1NAME (with CI and p-values) ---\n")
+  print(tukey_df)
+  
+  # Tukey plot
   p <- ggplot(tukey_df, aes(x = reorder(Comparison, diff), y = diff)) +
     geom_point(size = 3) +
     geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2) +
@@ -420,11 +458,26 @@ for (idx in unique(beta_results$index)) {
     labs(
       title = paste("Tukey HSD –", idx),
       x = "Comparison",
-      y = "Difference in Means"
+      y = "Difference in Marginal Means"
     ) +
     theme_minimal(base_size = 14)
   
   print(p)
+  
+  #Tidy fixed effects from your lmer model
+  tbl <- broom.mixed::tidy(glmer_model, effects = "fixed") %>%
+    mutate(across(where(is.numeric), ~ round(.x, 3)))
+  
+  # 2. Convert to table and export to Word
+  ft <- flextable(tbl) 
+  doc <- read_docx() %>% body_add_flextable(ft)
+  print(doc, target = paste0("model_fixed_effects",idx,".docx"))
+  
 }
 
-   
+## Table for manuscript
+
+
+
+
+

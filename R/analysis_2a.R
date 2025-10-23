@@ -226,12 +226,6 @@ data_mod_clean <- data_mod %>%
 data_mod_clean$value <-  as.numeric(data_mod_clean$value)
 data_mod_clean$YEAR <- as.factor(data_mod_clean$YEAR)
 
-ggplot(data_mod_clean, aes(x = value)) +
-  geom_histogram(binwidth = 0.05, fill = "steelblue", color = "white") +
-  facet_wrap(~ index, scales = "free_y") +
-  theme_minimal() +
-  labs(x = "Beta diversity value", y = "Frequency")
-
 
 for (idx in unique(data_mod$index)) {
   cat("\n===== Index:", idx, "=====\n")
@@ -239,16 +233,10 @@ for (idx in unique(data_mod$index)) {
   df <- data_mod_clean %>% filter(index == idx)
   
   mod <- glmmTMB(
-    value ~ rescale(built_wet) +
-      rescale(water_wet) +
-      rescale(log10(area_sqkm)) +
-      rescale(shan_wet) +
-      rescale(evi_mean) +
-      rescale(water_25km) +
-      rescale(built_25km) +
-      rescale(shan_gamma_25) +
+    value ~ SEASON +
+      NA_L1NAME +
       (1 | YEAR) + # random intercept for YEAR
-      (1 | LOCALITY_ID), # random intercept for GIW site ID, since we coudl have the same site on different years     
+      (1 | LOCALITY_ID), # random intercept for GIW site ID, since we could have the same site on different years     
     family = Gamma(link = "log"),
     data = df
   )
@@ -256,12 +244,4 @@ for (idx in unique(data_mod$index)) {
   print(check_model(mod))
   
 }
-
-
-data_mod_clean %>%
-  filter(index == "beta_S_C") %>%
-  ggplot(aes(x = value, y = evi_mean)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  theme_bw()
 

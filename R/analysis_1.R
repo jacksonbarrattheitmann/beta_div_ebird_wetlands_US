@@ -10,6 +10,9 @@ library(lme4)
 library(performance)
 library(tibble)
 library(scales)
+library(DHARMa)
+library(see)
+library(glmmTMB)
 
 ######### OBJECTIVE 1 - CONTINENTAL SCALE ########
 ######### ALL GIWs beta per season ##############
@@ -51,7 +54,7 @@ wet_all_winter <- wet_all_winter %>%
   inner_join(ecoregion_loc, by = "LOCALITY_ID") 
  
 
-##### FUNCTION for calculating beta 
+##### FUNCTION for calculating beta across ALL SITES (ONLY FOR SUPPLEMENT)
 
 calc_beta_by_year <- function(df, effort = 5, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)  # reproducibility if seed supplied
@@ -138,10 +141,11 @@ betas_ALL_fall <- betas_ALL_fall %>%
 
 betas_ALL <- rbind(betas_ALL_winter, betas_ALL_spring, betas_ALL_summer, betas_ALL_fall)
 
-########## PLOTS for OBJECTIVE 1 ##################
+# SUpplement plot
 
-
-ggplot(data = betas_ALL) +
+betas_boot %>%
+  filter(SEASON == "Summer") %>%
+ggplot() +
   geom_point(aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = value, color = SEASON)) + theme_bw() +
   geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
   xlab("Beta Diversity Index") +
@@ -164,6 +168,7 @@ ggsave("Fig1_betas_CONTINENTAL_SCALE.png", width = 6, height = 4,
        bg = "transparent")
 
 
+## OBJECTIVE CONTINENTAL SCALE - with SENSITIVITY FOR SITES per ECOREGION #############
 ### Let's do one more sensitivity analysis
 ### to deal with the distance-decay function, so let's just compare 1 wetland from each Ecoregion
 ### and bootstrap this a bunch of times
@@ -274,6 +279,84 @@ betas_boot <- rbind(betas_boot_winter, betas_boot_spring, betas_boot_summer, bet
 
 betas_boot <- readRDS("Intermediate_data/beta_results_continental.RDS")
 
+betas_sum <- betas_boot %>%
+  filter(SEASON == "Summer")
+
+wet_div_error <- betas_sum %>%
+  group_by(index) %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    lower = quantile(value, 0.025, na.rm = TRUE),
+    upper = quantile(value, 0.975, na.rm = TRUE)
+  )
+
+# Plot for the main text
+ggplot(data = betas_sum) +
+  geom_jitter(aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")), y = value), alpha = 0.25) +
+  geom_point(data = wet_div_error,aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      y = mean
+    ),
+    size = 3,
+    shape = 21,
+    fill = "darkred"
+  ) +
+  geom_errorbar (data = wet_div_error,aes(x = factor(index, levels = c("beta_S", "beta_S_PIE", "beta_S_C")),
+      ymin = lower,
+      ymax = upper
+    ),
+    color = "darkred",
+    linewidth = 1.2,
+    width = 0.2
+  ) +
+  geom_hline(yintercept = 1, color = "dodgerblue", linetype = "dashed", linewidth = 1) +
+  xlab("Beta Diversity Index") +
+  ylab("Value") +
+  scale_x_discrete(  labels = c(
+    "beta_S" = "βS",
+    "beta_S_PIE" = "βSPIE", 
+    "beta_S_C" = "βC"
+  )) +
+  theme(legend.position = "right",
+        axis.title.x = element_text(
+          margin = margin(t = 15)),
+        axis.title.y = element_text(
+          margin = margin(r = 15))) +
+    theme_bw()
+
+## Model results for SEASON
+
+for (idx in unique(betas_boot$index)) {
+  cat("\n===== Index:", idx, "=====\n")
+  
+  df <- betas_boot %>% filter(index == idx)
+  
+  mod <- glmmTMB(
+    value ~ SEASON +
+      (1 | YEAR), # random intercept for YEAR#     
+    family = Gamma(link = "log"),
+    data = df
+  )
+  print(summary(mod))
+  print(check_model(mod))
+  
+  #Tidy fixed effects from your lmer model
+  tbl <- broom.mixed::tidy(mod, effects = "fixed") %>%
+    mutate(across(where(is.numeric), ~ round(.x, 3)))
+  
+  # 2. Convert to table and export to Word
+  ft <- flextable(tbl) 
+  doc <- read_docx() %>% body_add_flextable(ft)
+  print(doc, target = paste0("model_fixed_effects",idx,".docx"))
+  
+}
+
+
+
+
+
+
+
+# supplement figure
 betas_boot %>%
   distinct(SEASON, YEAR, .keep_all = TRUE) %>%
 ggplot() +

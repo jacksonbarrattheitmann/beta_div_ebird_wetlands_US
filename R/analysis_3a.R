@@ -339,17 +339,26 @@ for (idx in unique(beta_results$index)) {
   df <- beta_results %>% filter(index == idx)
   
   # Mixed model (YEAR as random intercept)
-  lmer_model <- lmer(value ~ NA_L1NAME + SEASON + (1 | YEAR), data = df)
-  print(summary(lmer_model))
+  glmer_model <- glmmTMB(value ~ NA_L1NAME + SEASON + (1 | YEAR), 
+                        family = Gamma(link = "log"), 
+                          data = df)
+  print(check_model(glmer_model))
+  print(summary(glmer_model))
   
   # Tukey post-hoc for NA_L1NAME
-  emm <- emmeans(lmer_model, ~ NA_L1NAME)
+  emm <- emmeans(glmer_model, ~ NA_L1NAME)
   
   tukey_pairs <- as.data.frame(pairs(emm, adjust = "tukey")) %>%
     select(contrast, estimate, p.value)
   
   tukey_ci <- as.data.frame(confint(pairs(emm, adjust = "tukey"))) %>%
+    rename(
+      lower.CL = asymp.LCL,
+      upper.CL = asymp.UCL
+    ) %>%
     select(contrast, lower.CL, upper.CL)
+  
+  
   
   # Join p-values and CI into one clean table
   tukey_df <- left_join(tukey_pairs, tukey_ci, by = "contrast") %>%
@@ -380,5 +389,3 @@ for (idx in unique(beta_results$index)) {
   print(p)
 }
 
-anova(lmer_model, type = 3)
-summary(lmer_model)
