@@ -11,6 +11,7 @@ library(performance)
 library(tibble)
 library(scales)
 library(patchwork)
+library(sf)
 
 ######### OBJECTIVE 1 - CONTINENTAL SCALE ########
 ######### ALL GIWs rarefaction ##############
@@ -89,22 +90,14 @@ build_comm_mobr <- function(df, effort = 5, n_boot = 99, seed = NULL) {
 
 comm_df <- build_comm_mobr(wet_all)
 
-# Still uneven by Year, since some years have more samples than others, let's downsample
-
-comm_df_samp <- comm_df %>%
-  group_by(YEAR) %>%
-  slice_sample(n = min(table(comm_df$YEAR))) %>%
-  ungroup()
-
 # Now replace all the NAs
-comm_df_down <- comm_df_samp %>% 
+comm_df <- comm_df %>% 
   mutate(across(everything(), ~replace_na(.x, 0))) %>%
   mutate(sample_id = paste(LOCALITY_ID, YEAR, bootstrap, sep = "-"))
 
 ## What we want to do now, is just sample 
 ## 1 LOCALITY_ID out of this table
-
-comm_df_uni <- comm_df_down %>%
+comm_df_uni <- comm_df %>%
   group_by(LOCALITY_ID) %>%
   slice_sample(n = 1) %>%
   ungroup
@@ -124,9 +117,6 @@ env_df <- comm_df_uni %>%
 env_df_filt <-env_df %>%
   select(LOCALITY_ID, LONGITUDE, LATITUDE, NA_L1NAME)
 
-range(env_df_filt$LONGITUDE, na.rm = TRUE)
-range(env_df$LATITUDE, na.rm = TRUE)
-
 
 ## Need to get the mean abundance from the community matrix
 comm_sum <- rowSums(comm_df_final) %>%
@@ -136,17 +126,8 @@ comm_sum <- rowSums(comm_df_final) %>%
 mob_wet <- make_mob_in(comm_df_final, env_df_filt, coord_names = c('LONGITUDE', 'LATITUDE'), 
                        latlong = TRUE)
 
-head(mob_wet$spat)
-
-
-# Regular (non-spatial) SBR
-rf_sbr <- rarefaction(mob_wet, method = "SBR")
-
 # Spatial sample-based (kNN)
 rf_ssbr_knn <- rarefaction(mob_wet, method = "sSBR", spat_algo = "kNN", latlong = TRUE)
-
-# Spatial sample-based (kNCN)
-rf_ssbr_kncn <- rarefaction(mob_wet, method = "sSBR", spat_algo = "kNCN", latlong = TRUE)
 
 # Random individual based rarefaction (IBR)
 rf_ibr <- rarefaction(mob_wet, method = "IBR")
@@ -156,30 +137,23 @@ n_ibr <- 0:(length(rf_ibr)-1)
 df_ibr <- tibble(n = n_ibr / comm_sum, S = rf_ibr)
 
 # Turn into data frames
-df_sbr <- tibble(n = seq_along(rf_sbr), S = rf_sbr, method = "SBR")
 df_ssbr_knn  <- tibble(n = seq_along(rf_ssbr_knn), S = rf_ssbr_knn, method = "sSBR_kNN")
-df_ssbr_kncn <- tibble(n = seq_along(rf_ssbr_kncn), S = rf_ssbr_kncn, method = "sSBR_kNCN")
+
 
 ## Dan's suggested plot
 #compare_samp_rarefaction(mob_wet)
 #lines(1:length(rf_ibr) / comm_sum, rf_ibr, col='purple')
 
-
-# Combine
-df_all <- bind_rows(df_sbr, df_ssbr_knn, df_ssbr_kncn)
-
 # Plot
-ggplot(df_all, aes(x = n, y = S, color = method)) +
+ggplot(df_ssbr_knn, aes(x = n, y = S, color = method)) +
   geom_line(size = 1.1) +
-  geom_line(data = df_ibr, aes(x = n, y = S, color = "IBR"), size = 1.1) +
+  geom_line(data = df_ibr, aes(x = n, y = S, color = "IBR"), linewidth = 1.1) +
   scale_color_manual(values = c(
-    "SBR" = "black",
-    "sSBR_kNN" = "red",
-    "sSBR_kNCN" = "blue",
+    "sSBR_kNN" = "black",
     "IBR" = "purple"
   )) +
   labs(
-    x = "Sampling effort",
+    x = "# of GIWs",
     y = "Species richness"
   ) +
   theme_minimal(base_size = 10) +
@@ -190,19 +164,148 @@ ggplot(df_all, aes(x = n, y = S, color = method)) +
 
 
 
+# ---- BOOTSTRAP FUNCTION ----
+run_single_boot <- function(comm_df, env, comm_sum) {
+  
+  # Select 1 row per LOCALITY_ID
+  comm_df_uni <- comm_df %>%
+    group_by(LOCALITY_ID) %>%
+    slice_sample(n = 1) %>%
+    ungroup()
+  
+  # Build comm matrix
+  comm_df_final <- comm_df_uni %>%
+    column_to_rownames(var = "sample_id") %>%
+    select(-LOCALITY_ID, -YEAR, -bootstrap)
+  
+  ## Need to get the mean abundance from the community matrix
+  comm_sum <- rowSums(comm_df_final) %>%
+    mean()
+  
+  # Build env
+  env_df <- comm_df_uni %>%
+    select(LOCALITY_ID, YEAR, bootstrap, sample_id) %>%
+    left_join(env, by = "LOCALITY_ID") %>%
+    column_to_rownames(var = "sample_id") %>%
+    mutate(dummy = "wetland")
+  
+  env_df_filt <- env_df %>%
+    select(LOCALITY_ID, LONGITUDE, LATITUDE, NA_L1NAME)
+  
+  # Build mobr object
+  mob_wet <- make_mob_in(
+    comm_df_final, env_df_filt,
+    coord_names = c("LONGITUDE", "LATITUDE"),
+    latlong = TRUE
+  )
+  
+  # ---- Rarefaction curves ----
+  
+  # Spatial SBR (kNN)
+  rf_ssbr_knn <- rarefaction(mob_wet, method = "sSBR",
+                             spat_algo = "kNN", latlong = TRUE)
+  
+  # IBR
+  rf_ibr <- rarefaction(mob_wet, method = "IBR")
+  n_ibr <- 1:(length(rf_ibr)-1)
+  
+  # Output tidy list
+  list(
+    ssbr = tibble(n = seq_along(rf_ssbr_knn), S = rf_ssbr_knn),
+    ibr  = tibble(n = n_ibr / comm_sum, S = rf_ibr, pull = seq_along(rf_ibr))
+  )
+}
+
+set.seed(123)
+
+nboot <- 5
+
+boot_results <- map(1:nboot, ~ run_single_boot(comm_df, env, comm_sum))
+
+ssbr_all <- map_df(boot_results, "ssbr", .id = "rep")
+
+ssbr_ci <- ssbr_all %>%
+  group_by(n) %>%
+  summarise(
+    mean = mean(S),
+    lower = quantile(S, 0.025),
+    upper = quantile(S, 0.975)
+  ) %>%
+  mutate(method = "sSBR_kNN")
+
+ibr_all <- map_df(boot_results, "ibr", .id = "rep")
+
+# Find the minimum curve length across bootstrap runs
+min_len <- ibr_all %>%
+  group_by(rep) %>%
+  summarise(L = max(pull)) %>%
+  pull(L) %>%
+  min()
+
+# Truncate all IBR curves to that length
+ibr_trunc <- ibr_all %>% 
+  filter(pull <= min_len)
+
+ibr_ci <- ibr_trunc %>%
+  group_by(pull) %>%
+  summarise(
+    n = mean(n),
+    mean = mean(S),
+    lower = quantile(S, 0.025),
+    upper = quantile(S, 0.975)
+  ) %>%
+  mutate(method = "IBR")
+
+
+
+
+ggplot() +
+  # sSBR CI band
+  geom_ribbon(data = ssbr_ci,
+              aes(x = n, ymin = lower, ymax = upper),
+              fill = "grey80", alpha = 0.5) +
+  geom_line(data = ssbr_ci, aes(x = n, y = mean), color = "black", linewidth = 1.1) +
+  
+  # IBR CI band
+  geom_ribbon(data = ibr_ci,
+              aes(x = n, ymin = lower, ymax = upper),
+              fill = "purple", alpha = 0.2) +
+  geom_line(data = ibr_ci, aes(x = n, y = mean), color = "purple", linewidth = 1.1) +
+  
+  labs(
+    x = "# of GIWs",
+    y = "Species richness"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "none")
+
+
+
+
 #### OBJECTIVE 2 - ECOREGION ########
 ### now let's do this WITHIN ecoregion
 ## First let's filter down to our ecoregions that actually worked for our analysis
-
-env_df_count <- env_df %>%
+env_df_count <- env_df_filt %>%
   count(NA_L1NAME) %>%
   filter(n > 5)
 
-env_df_eco <- env_df %>%
+env_df_eco <- env_df_filt %>%
   filter(NA_L1NAME %in% env_df_count$NA_L1NAME)
 
 comm_df_uni_eco <- comm_df_uni %>%
   filter(LOCALITY_ID %in% env_df_eco$LOCALITY_ID)
+
+env_df_eco <- env_df_eco %>%
+  mutate(
+    LONGITUDE = as.numeric(LONGITUDE),
+    LATITUDE  = as.numeric(LATITUDE)
+  ) %>%
+  filter(
+    !is.na(LONGITUDE),
+    !is.na(LATITUDE),
+    LONGITUDE >= -180, LONGITUDE <= 180,
+    LATITUDE >= -90, LATITUDE <= 90
+  )
 
 
 plot_rarefaction_ecoregion <- function(comm_df, env_df, ecoregion_name, coord_names = c("LONGITUDE", "LATITUDE")) {
@@ -225,22 +328,14 @@ plot_rarefaction_ecoregion <- function(comm_df, env_df, ecoregion_name, coord_na
   mob_in <- make_mob_in(comm_sub, eco_env, coord_names = coord_names, latlong = TRUE)
   
   # Compute rarefaction curves
-  rf_sbr      <- rarefaction(mob_in, method = "SBR")
   rf_ssbr_knn <- rarefaction(mob_in, method = "sSBR", spat_algo = "kNN")
-  rf_ssbr_kncn <- rarefaction(mob_in, method = "sSBR", spat_algo = "kNCN")
 
   # Prepend 0 so lines start at origin
-  rf_sbr       <- c(0, rf_sbr)
   rf_ssbr_knn  <- c(0, rf_ssbr_knn)
-  rf_ssbr_kncn <- c(0, rf_ssbr_kncn)
 
   
   # Convert to tidy data frames
-  df_sbr      <- tibble(n = seq_along(rf_sbr), S = rf_sbr, method = "SBR")
   df_ssbr_knn  <- tibble(n = seq_along(rf_ssbr_knn), S = rf_ssbr_knn, method = "sSBR_kNN")
-  df_ssbr_kncn <- tibble(n = seq_along(rf_ssbr_kncn), S = rf_ssbr_kncn, method = "sSBR_kNCN")
-  
-  df_all <- bind_rows(df_sbr, df_ssbr_knn, df_ssbr_kncn)
   
   # curves for the IBR
   rf_ibr <- rarefaction(mob_in, method = "IBR")
@@ -249,27 +344,21 @@ plot_rarefaction_ecoregion <- function(comm_df, env_df, ecoregion_name, coord_na
   
   
   ## Dan's suggested plot
-  p <- ggplot(df_all, aes(x = n, y = S, color = method)) +
+  p <- ggplot(df_ssbr_knn, aes(x = n, y = S, color = method)) +
     geom_line(size = 1.1) +
     geom_line(data = df_ibr, aes(x = n, y = S, color = "IBR"), size = 1.1) +
     scale_color_manual(values = c(
-      "SBR" = "black",
-      "sSBR_kNN" = "red",
-      "sSBR_kNCN" = "blue",
+      "sSBR_kNN" = "black",
       "IBR" = "purple"
     )) +
     labs(
       title = ecoregion_name,
-      x = "Sampling effort",
+      x = "# of GIWs",
       y = "Species richness"
     ) +
     theme_minimal(base_size = 10) +
     theme(legend.position = "bottom",
           plot.title = element_text(size = 10))
-    
-  #compare_samp_rarefaction(mob_in)
-  #lines(1:length(rf_ibr) / comm_mean, rf_ibr, col='purple')
-  #title(paste(ecoregion_name))
   
   return(p)
 }
@@ -285,6 +374,16 @@ plots
 (wrap_plots(plots[c(1,5,2, 6:7)]) +
     plot_layout(guides = "collect")) &
   theme(legend.position = "bottom")
+
+
+
+
+
+
+
+
+
+
 
 
 ## Additional function that truncates down to the minimum number of sites across ecoregions
