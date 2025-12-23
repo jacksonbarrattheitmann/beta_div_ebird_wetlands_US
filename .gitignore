@@ -1,7 +1,4 @@
 *.DS_Store
 .Rhistory
 .Rproj.user
-Data/eBird_buffer_data_chunks/
-Data/eBird_data_by_ref_wetland/
-Data/global_NFWs/
-Data/1km_ebird_buffers/
+Data/old_data
