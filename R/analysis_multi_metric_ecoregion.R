@@ -20,7 +20,7 @@ wet_eco_spring <- readRDS("Intermediate_data/all_wet_check_for_analysis_SPRING.R
 wet_eco_winter <- readRDS("Intermediate_data/all_wet_check_for_analysis_WINTER.RDS")
 
 # the ENV data with ECOREGION = NA_L1NAME column
-env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
+env <- readRDS("Data/old_data/earth_engine_env_data/env_matrix.RDS")
 
 # need spatial coords for the LOCALITY_IDs
 wet_coords <- readRDS("Intermediate_data/locality_ids_long_lat.RDS")
@@ -475,8 +475,315 @@ for (idx in unique(beta_results$index)) {
   
 }
 
-## Table for manuscript
 
+
+### Supplementary analysis with classic beta metrics
+### for just the summer period
+
+calculate_beta_ecoregion_sf <- function(
+    wet_long,
+    env_eco,
+    n_reps = 999,
+    C_target_gamma = 0.75,
+    max_anchor_attempts = 1000,
+    include_mob = TRUE,
+    include_classic = TRUE
+) {
+  
+  if (include_classic && !requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required when include_classic = TRUE.")
+  }
+  
+  calc_classic_beta <- function(comm_mat, eco, anchor_year, anchor_id, rep_id) {
+    if (nrow(comm_mat) < 2) {
+      return(NULL)
+    }
+    
+    bray_vals <- as.numeric(vegan::vegdist(comm_mat, method = "bray"))
+    jaccard_vals <- as.numeric(vegan::vegdist(comm_mat, method = "jaccard", binary = TRUE))
+    sorensen_vals <- as.numeric(vegan::vegdist(comm_mat, method = "bray", binary = TRUE))
+    
+    tibble(
+      replicate = rep_id,
+      NA_L1NAME = eco,
+      YEAR = anchor_year,
+      ANCHOR_ID = anchor_id,
+      scale = "beta_classic",
+      index = c("Bray-Curtis", "Jaccard", "Sorensen"),
+      sample_size = NA_real_,
+      effort = 5,
+      gamma_coverage = NA_real_,
+      value = c(
+        mean(bray_vals, na.rm = TRUE),
+        mean(jaccard_vals, na.rm = TRUE),
+        mean(sorensen_vals, na.rm = TRUE)
+      )
+    )
+  }
+  
+  results_df <- tibble()
+  
+  env_eco <- env_eco %>%
+    filter(LOCALITY_ID %in% wet_long$LOCALITY_ID) %>%
+    filter(!is.na(LATITUDE), !is.na(LONGITUDE)) %>%
+    filter(
+      LATITUDE >= -90, LATITUDE <= 90,
+      LONGITUDE >= -180, LONGITUDE <= 180
+    )
+  
+  ecoregions <- unique(env_eco$NA_L1NAME)
+  
+  for (eco in ecoregions) {
+    message("Processing ecoregion: ", eco)
+    
+    env_sub <- env_eco %>% filter(NA_L1NAME == eco)
+    if (nrow(env_sub) < 5) next
+    
+    env_sub_sf <- st_as_sf(env_sub, coords = c("LONGITUDE", "LATITUDE"), crs = 4326) %>%
+      st_transform(crs = 5070)
+    
+    dist_matrix <- st_distance(env_sub_sf)
+    mean_dist_num <- mean(as.numeric(dist_matrix[upper.tri(dist_matrix)]), na.rm = TRUE)
+    
+    replicate_counter <- 0
+    
+    while (replicate_counter < n_reps) {
+      anchor_attempts <- 0
+      valid <- FALSE
+      
+      while (!valid && anchor_attempts < max_anchor_attempts) {
+        anchor_idx <- sample(seq_len(nrow(env_sub_sf)), 1)
+        anchor_id <- env_sub$LOCALITY_ID[anchor_idx]
+        
+        valid_years <- wet_long %>%
+          filter(LOCALITY_ID == anchor_id) %>%
+          pull(YEAR) %>%
+          unique()
+        
+        if (length(valid_years) == 0) {
+          anchor_attempts <- anchor_attempts + 1
+          next
+        }
+        
+        anchor_year <- sample(valid_years, 1)
+        
+        dists <- st_distance(env_sub_sf[anchor_idx, ], env_sub_sf)
+        dists_num <- as.numeric(dists)
+        candidates <- which(dists_num <= mean_dist_num & dists_num > 0)
+        candidates <- unlist(candidates, use.names = FALSE)
+        
+        candidate_idxs_filtered <- candidates[
+          vapply(candidates, function(i) {
+            lid <- env_sub$LOCALITY_ID[i]
+            n_events <- wet_long %>%
+              filter(LOCALITY_ID == lid, YEAR == anchor_year) %>%
+              distinct(SAMPLING_EVENT_IDENTIFIER) %>%
+              nrow()
+            n_events >= 5
+          }, logical(1))
+        ]
+        
+        if (length(candidate_idxs_filtered) < 4) {
+          anchor_attempts <- anchor_attempts + 1
+          next
+        }
+        
+        other_idxs <- sample(candidate_idxs_filtered, 4)
+        selected_idxs <- c(anchor_idx, other_idxs)
+        selected_ids <- env_sub$LOCALITY_ID[selected_idxs]
+        
+        events_by_loc <- purrr::map(selected_ids, function(lid) {
+          x <- wet_long %>%
+            filter(LOCALITY_ID == lid, YEAR == anchor_year) %>%
+            distinct(SAMPLING_EVENT_IDENTIFIER) %>%
+            pull(SAMPLING_EVENT_IDENTIFIER)
+          
+          if (length(x) < 5) return(NULL)
+          sample(x, size = 5)
+        })
+        
+        if (any(sapply(events_by_loc, is.null))) {
+          anchor_attempts <- anchor_attempts + 1
+          next
+        }
+        
+        events_map <- tibble(
+          LOCALITY_ID = rep(selected_ids, each = 5),
+          SAMPLING_EVENT_IDENTIFIER = unlist(events_by_loc)
+        )
+        
+        comm_matrix_df <- wet_long %>%
+          filter(
+            YEAR == anchor_year,
+            SAMPLING_EVENT_IDENTIFIER %in% events_map$SAMPLING_EVENT_IDENTIFIER,
+            LOCALITY_ID %in% selected_ids
+          ) %>%
+          group_by(LOCALITY_ID, COMMON_NAME) %>%
+          summarise(abundance = sum(OBSERVATION_COUNT, na.rm = TRUE), .groups = "drop") %>%
+          pivot_wider(
+            names_from = COMMON_NAME,
+            values_from = abundance,
+            values_fill = list(abundance = 0)
+          )
+        
+        if (!"LOCALITY_ID" %in% names(comm_matrix_df)) {
+          anchor_attempts <- anchor_attempts + 1
+          next
+        }
+        
+        comm_mat <- comm_matrix_df %>%
+          column_to_rownames("LOCALITY_ID") %>%
+          as.data.frame(stringsAsFactors = FALSE)
+        
+        if (ncol(comm_mat) > 0) {
+          comm_mat <- comm_mat[, colSums(comm_mat) > 0, drop = FALSE]
+        }
+        
+        if (
+          nrow(comm_mat) == 5 &&
+          ncol(comm_mat) > 0 &&
+          all(rowSums(comm_mat) > 0)
+        ) {
+          valid <- TRUE
+        } else {
+          anchor_attempts <- anchor_attempts + 1
+        }
+      }
+      
+      if (!valid) break
+      
+      out <- list()
+      
+      if (include_mob) {
+        comm_div <- tryCatch({
+          calc_comm_div(
+            comm_mat,
+            index = c("S", "S_PIE", "S_C"),
+            extrapolate = TRUE,
+            scales = c("beta"),
+            C_target_gamma = C_target_gamma
+          )
+        }, error = function(e) NULL)
+        
+        if (!is.null(comm_div) && nrow(comm_div) > 0) {
+          out[["mob"]] <- as_tibble(comm_div) %>%
+            mutate(
+              replicate = replicate_counter + 1,
+              NA_L1NAME = eco,
+              YEAR = anchor_year,
+              ANCHOR_ID = anchor_id
+            )
+        }
+      }
+      
+      if (include_classic) {
+        out[["classic"]] <- calc_classic_beta(
+          comm_mat = comm_mat,
+          eco = eco,
+          anchor_year = anchor_year,
+          anchor_id = anchor_id,
+          rep_id = replicate_counter + 1
+        )
+      }
+      
+      out_df <- purrr::list_rbind(out)
+      
+      if (is.null(out_df) || nrow(out_df) == 0) {
+        next
+      }
+      
+      results_df <- bind_rows(results_df, out_df)
+      replicate_counter <- replicate_counter + 1
+    }
+    
+    if (replicate_counter < n_reps) {
+      warning(sprintf("Only %d valid replicates for ecoregion %s", replicate_counter, eco))
+    }
+  }
+  
+  results_df
+}
+
+beta_results_summer <- calculate_beta_ecoregion_sf(
+  wet_eco_summer,
+  env_eco,
+  n_reps = 99,
+  max_anchor_attempts = 99
+)
+
+index_levels <- c("beta_S", "beta_S_PIE", "beta_S_C", "Bray-Curtis", "Jaccard", "Sorensen")
+
+
+beta_results_summer2 <- beta_results_summer %>%
+  mutate(
+    index = factor(index, levels = index_levels),
+    scale = factor(scale, levels = c("beta", "beta_classic")),
+    eco_scale = paste(NA_L1NAME, ifelse(scale == "beta", "MoB", "Classic"), sep = " | ")
+  )
+
+wet_div_error <- beta_results_summer2 %>%
+  group_by(NA_L1NAME, scale, eco_scale, index) %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    lower = quantile(value, 0.025, na.rm = TRUE),
+    upper = quantile(value, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(beta_results_summer2, aes(x = index, y = value, color = NA_L1NAME)) +
+  geom_jitter(alpha = 0.25, width = 0.15) +
+  geom_point(
+    data = wet_div_error,
+    aes(x = index, y = mean),
+    inherit.aes = FALSE,
+    size = 2.5,
+    shape = 21,
+    fill = "darkred"
+  ) +
+  geom_errorbar(
+    data = wet_div_error,
+    aes(x = index, ymin = lower, ymax = upper),
+    inherit.aes = FALSE,
+    color = "darkred",
+    linewidth = 1,
+    width = 0.2
+  ) +
+  geom_hline(
+    data = data.frame(scale = "beta"),
+    aes(yintercept = 1),
+    inherit.aes = FALSE,
+    color = "dodgerblue",
+    linetype = "dashed",
+    linewidth = 0.9
+  ) +
+  facet_wrap(
+    NA_L1NAME ~ scale,
+    scales = "free",
+    labeller = labeller(
+      NA_L1NAME = label_wrap_gen(width = 18),
+      scale = as_labeller(c(
+        beta = "MoB β-Diversity",
+        beta_classic = "Classic β-Diversity"
+      ))
+    )
+  )+
+  xlab("Beta Diversity Index") +
+  ylab("Value") +
+  scale_x_discrete(labels = c(
+    "beta_S" = "βS",
+    "beta_S_PIE" = "βSPIE",
+    "beta_S_C" = "βC",
+    "Bray-Curtis" = "Bray-Curtis",
+    "Jaccard" = "Jaccard's Index",
+    "Sorensen" = "Sorensen's Index"
+  )) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 6),
+    panel.spacing = unit(0.8, "lines"),
+    legend.position = "none"
+  )
 
 
 

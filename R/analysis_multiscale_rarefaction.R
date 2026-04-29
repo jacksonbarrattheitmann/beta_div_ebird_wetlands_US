@@ -18,7 +18,7 @@ library(sf)
 
 wet_all <- readRDS("Intermediate_data/all_wet_check_for_analysis.RDS")
 
-env <- readRDS("Data/earth_engine_env_data/env_matrix.RDS")
+env <- readRDS("Data/old_data/earth_engine_env_data/env_matrix.RDS")
 
 # need spatial coords for the LOCALITY_IDs
 wet_coords <- readRDS("Intermediate_data/locality_ids_long_lat.RDS")
@@ -139,10 +139,6 @@ df_ibr <- tibble(n = n_ibr / comm_sum, S = rf_ibr)
 # Turn into data frames
 df_ssbr_knn  <- tibble(n = seq_along(rf_ssbr_knn), S = rf_ssbr_knn, method = "sSBR_kNN")
 
-
-## Dan's suggested plot
-#compare_samp_rarefaction(mob_wet)
-#lines(1:length(rf_ibr) / comm_sum, rf_ibr, col='purple')
 
 # Plot
 ggplot(df_ssbr_knn, aes(x = n, y = S, color = method)) +
